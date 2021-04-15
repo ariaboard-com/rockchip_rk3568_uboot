@@ -87,6 +87,7 @@ struct crtc_state {
 	struct rockchip_crtc *crtc;
 	void *private;
 	ofnode node;
+	struct device_node *ports_node;
 	int crtc_id;
 
 	int format;
@@ -105,6 +106,7 @@ struct crtc_state {
 	bool yuv_overlay;
 	struct rockchip_mcu_timing mcu_timing;
 	u32 dual_channel_swap;
+	u32 feature;
 	struct vop_rect max_output;
 };
 

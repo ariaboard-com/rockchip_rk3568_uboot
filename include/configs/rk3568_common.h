@@ -46,15 +46,19 @@
 
 /* MMC/SD IP block */
 #define CONFIG_BOUNCE_BUFFER
-
+#ifdef CONFIG_AHCI
+#define CONFIG_SYS_SCSI_MAX_SCSI_ID	1
+#define CONFIG_SYS_SCSI_MAX_LUN		1
+/*#define CONFIG_SCSI_AHCI_PLAT */
+#define CONFIG_SYS_SCSI_MAX_DEVICE	(CONFIG_SYS_SCSI_MAX_SCSI_ID * \
+					 CONFIG_SYS_SCSI_MAX_LUN)
+#endif
 /* Nand */
 #define CONFIG_SYS_MAX_NAND_DEVICE	1
 #define CONFIG_SYS_NAND_ONFI_DETECTION
 #define CONFIG_SYS_NAND_PAGE_SIZE	2048
 #define CONFIG_SYS_NAND_PAGE_COUNT	64
 #define CONFIG_SYS_NAND_SIZE		(256 * 1024 * 1024)
-
-#define CONFIG_SUPPORT_EMMC_RPMB
 
 #define CONFIG_SYS_SDRAM_BASE		0
 #define SDRAM_MAX_SIZE			0xf0000000
@@ -68,8 +72,8 @@
 #define CONFIG_ROCKUSB_G_DNL_PID	0x350a
 
 #define ENV_MEM_LAYOUT_SETTINGS \
-	"scriptaddr=0x00b00000\0" \
-	"pxefile_addr_r=0x00a00000\0" \
+	"scriptaddr=0x00c00000\0" \
+	"pxefile_addr_r=0x00e00000\0" \
 	"fdt_addr_r=0x0a100000\0" \
 	"kernel_addr_no_bl32_r=0x00280000\0" \
 	"kernel_addr_r=0x00a80000\0" \
