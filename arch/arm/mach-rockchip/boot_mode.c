@@ -18,6 +18,8 @@ enum {
 	PL,
 };
 
+static u32 bcb_recovery_msg;
+
 static int misc_require_recovery(u32 bcb_offset)
 {
 	struct bootloader_message *bmsg;
@@ -42,20 +44,21 @@ static int misc_require_recovery(u32 bcb_offset)
 		recovery = 0;
 	} else {
 		recovery = !strcmp(bmsg->command, "boot-recovery");
-		if ((dev_desc->if_type == IF_TYPE_MMC && dev_desc->devnum == 1) ||
-		    (dev_desc->if_type == IF_TYPE_USB && dev_desc->devnum == 0)) {
-			if (!strcmp(bmsg->recovery, "recovery\n--rk_fwupdate\n")) {
-				if (dev_desc->if_type == IF_TYPE_MMC)
-					env_update("bootargs", "sdfwupdate");
-				else if (dev_desc->if_type == IF_TYPE_USB)
-					env_update("bootargs", "usbfwupdate");
-			}
-		}
+		if (!strcmp(bmsg->recovery, "recovery\n--rk_fwupdate\n"))
+			bcb_recovery_msg = BCB_MSG_RECOVERY_RK_FWUPDATE;
+		else if (!strcmp(bmsg->recovery, "recovery\n--factory_mode=whole") ||
+			 !strcmp(bmsg->recovery, "recovery\n--factory_mode=small"))
+			bcb_recovery_msg = BCB_MSG_RECOVERY_PCBA;
 	}
 
 	free(bmsg);
 out:
 	return recovery;
+}
+
+int get_bcb_recovery_msg(void)
+{
+	return bcb_recovery_msg;
 }
 
 /*
