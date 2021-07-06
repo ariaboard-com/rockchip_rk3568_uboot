@@ -6,6 +6,7 @@
 
 #include <common.h>
 #include <amp.h>
+#include <android_ab.h>
 #include <android_bootloader.h>
 #include <android_image.h>
 #include <bidram.h>
@@ -30,6 +31,7 @@
 #include <video_rockchip.h>
 #include <asm/io.h>
 #include <asm/gpio.h>
+#include <android_avb/rk_avb_ops_user.h>
 #include <dm/uclass-internal.h>
 #include <dm/root.h>
 #include <power/charge_display.h>
@@ -95,7 +97,7 @@ static int rockchip_set_ethaddr(void)
 	int ret, i;
 	bool need_write = false, randomed = false;
 
-	ret = vendor_storage_read(VENDOR_LAN_MAC_ID, ethaddr, sizeof(ethaddr));
+	ret = vendor_storage_read(LAN_MAC_ID, ethaddr, sizeof(ethaddr));
 	for (i = 0; i < MAX_ETHERNET; i++) {
 		if (ret <= 0 || !is_valid_ethaddr(&ethaddr[i * ARP_HLEN])) {
 			if (!randomed) {
@@ -125,7 +127,7 @@ static int rockchip_set_ethaddr(void)
 	}
 
 	if (need_write) {
-		ret = vendor_storage_write(VENDOR_LAN_MAC_ID,
+		ret = vendor_storage_write(LAN_MAC_ID,
 					   ethaddr, sizeof(ethaddr));
 		if (ret < 0)
 			printf("%s: vendor_storage_write failed %d\n",
@@ -148,7 +150,7 @@ static int rockchip_set_serialno(void)
 	memset(serialno_str, 0, VENDOR_SN_MAX);
 
 #ifdef CONFIG_ROCKCHIP_VENDOR_PARTITION
-	ret = vendor_storage_read(VENDOR_SN_ID, serialno_str, (VENDOR_SN_MAX-1));
+	ret = vendor_storage_read(SN_ID, serialno_str, (VENDOR_SN_MAX-1));
 	if (ret > 0) {
 		i = strlen(serialno_str);
 		for (; i > 0; i--) {
@@ -471,6 +473,11 @@ int board_init(void)
 
 #ifdef CONFIG_DM_DVFS
 	dvfs_init(true);
+#endif
+
+#ifdef CONFIG_ANDROID_AB
+	if (ab_decrease_tries())
+		printf("Decrease ab tries count fail!\n");
 #endif
 
 	return rk_board_init();
@@ -883,14 +890,18 @@ int board_do_bootm(int argc, char * const argv[])
 
 void autoboot_command_fail_handle(void)
 {
-#ifdef CONFIG_AVB_VBMETA_PUBLIC_KEY_VALIDATE
 #ifdef CONFIG_ANDROID_AB
-	run_command("fastboot usb 0;", 0);  /* use fastboot to ative slot */
-#else
+	if (rk_avb_ab_have_bootable_slot() == true)
+		run_command("reset;", 0);
+	else
+		run_command("fastboot usb 0;", 0);
+#endif
+
+#ifdef CONFIG_AVB_VBMETA_PUBLIC_KEY_VALIDATE
 	run_command("rockusb 0 ${devtype} ${devnum}", 0);
 	run_command("fastboot usb 0;", 0);
 #endif
-#endif
+
 }
 
 #ifdef CONFIG_FIT_ROLLBACK_PROTECT
