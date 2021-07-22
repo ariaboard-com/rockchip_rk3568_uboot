@@ -245,6 +245,9 @@ static int dtb_check_ok(void *fdt, void *ufdt)
 		}
 	}
 
+	if (!compare[0])
+		return 1;
+
 	if (compare[0] && compare[1])
 		return !memcmp(compare[0], compare[1], strlen(compare[0]));
 
@@ -279,7 +282,7 @@ int init_kernel_dtb(void)
 	}
 
 dtb_embed:
-	if (!fdt_check_header(gd->fdt_blob_kern)) {
+	if (gd->fdt_blob_kern) {
 		if (!dtb_check_ok((void *)gd->fdt_blob_kern, (void *)gd->fdt_blob)) {
 			printf("Embedded kernel dtb mismatch this platform!\n");
 			return -EINVAL;

@@ -626,6 +626,18 @@ int board_bidram_reserve(struct bidram *bidram)
 	return 0;
 }
 
+int board_sysmem_reserve(struct sysmem *sysmem)
+{
+#ifdef CONFIG_SKIP_RELOCATE_UBOOT
+	if (!sysmem_alloc_base_by_name("NO-RELOC-CODE",
+	    CONFIG_SYS_TEXT_BASE, SZ_2M)) {
+		printf("Failed to reserve sysmem for U-Boot code\n");
+		return -ENOMEM;
+	}
+#endif
+	return 0;
+}
+
 parse_fn_t board_bidram_parse_fn(void)
 {
 	return param_parse_ddr_mem;
@@ -801,6 +813,16 @@ int bootm_board_start(void)
 	return 0;
 }
 
+int bootm_image_populate_dtb(void *img)
+{
+	if ((gd->flags & GD_FLG_KDTB_READY) && !gd->fdt_blob_kern)
+		sysmem_free((phys_addr_t)gd->fdt_blob);
+	else
+		gd->fdt_blob = (void *)env_get_ulong("fdt_addr_r", 16, 0);
+
+	return resource_populate_dtb(img, (void *)gd->fdt_blob);
+}
+
 /*
  * Implement it to support CLI command:
  *   - Android: bootm [aosp addr]
@@ -838,18 +860,18 @@ int board_do_bootm(int argc, char * const argv[])
 		hdr = (struct andr_img_hdr *)img;
 		printf("BOOTM: transferring to board Android\n");
 
-#ifdef CONFIG_USING_KERNEL_DTB
-		sysmem_free((phys_addr_t)gd->fdt_blob);
-		/* erase magic */
-		fdt_set_magic((void *)gd->fdt_blob, ~0);
-		gd->fdt_blob = NULL;
-#endif
 		load_addr = env_get_ulong("kernel_addr_r", 16, 0);
 		load_addr -= hdr->page_size;
 		size = android_image_get_end(hdr) - (ulong)hdr;
 
 		if (!sysmem_alloc_base(MEM_ANDROID, (ulong)hdr, size))
 			return -ENOMEM;
+
+		ret = bootm_image_populate_dtb(img);
+		if (ret) {
+			printf("bootm can't read dtb\n");
+			return ret;
+		}
 
 		ret = android_image_memcpy_separate(hdr, &load_addr);
 		if (ret) {
@@ -865,14 +887,22 @@ int board_do_bootm(int argc, char * const argv[])
 #if IMAGE_ENABLE_FIT
 	if (format == IMAGE_FORMAT_FIT) {
 		char boot_cmd[64];
+		int ret;
 
 		printf("BOOTM: transferring to board FIT\n");
+
+		ret = bootm_image_populate_dtb(img);
+		if (ret) {
+			printf("bootm can't read dtb\n");
+			return ret;
+		}
 		snprintf(boot_cmd, sizeof(boot_cmd), "boot_fit %s", argv[1]);
 		return run_command(boot_cmd, 0);
 	}
 #endif
 
 	/* uImage */
+#if 0
 #if defined(CONFIG_IMAGE_FORMAT_LEGACY)
 	if (format == IMAGE_FORMAT_LEGACY &&
 	    image_get_type(img) == IH_TYPE_MULTI) {
@@ -883,7 +913,7 @@ int board_do_bootm(int argc, char * const argv[])
 		return run_command(boot_cmd, 0);
 	}
 #endif
-
+#endif
 	return 0;
 }
 #endif
