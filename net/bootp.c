@@ -120,6 +120,7 @@ static int check_reply_packet(uchar *pkt, unsigned dest, unsigned src,
 {
 	struct bootp_hdr *bp = (struct bootp_hdr *)pkt;
 	int retval = 0;
+	u32 bp_id = bp->bp_id;
 
 	if (dest != PORT_BOOTPC || src != PORT_BOOTPS)
 		retval = -1;
@@ -131,7 +132,7 @@ static int check_reply_packet(uchar *pkt, unsigned dest, unsigned src,
 		retval = -4;
 	else if (bp->bp_hlen != HWL_ETHER)
 		retval = -5;
-	else if (!bootp_match_id(net_read_u32(&bp->bp_id)))
+	else if (!bootp_match_id(net_read_u32(&bp_id)))
 		retval = -6;
 	else if (memcmp(bp->bp_chaddr, net_ethaddr, HWL_ETHER) != 0)
 		retval = -7;
@@ -707,6 +708,7 @@ void bootp_request(void)
 	struct in_addr zero_ip;
 	struct in_addr bcast_ip;
 	char *ep;  /* Environment pointer */
+	u32 bp_id;
 
 	bootstage_mark_name(BOOTSTAGE_ID_BOOTP_START, "bootp_start");
 #if defined(CONFIG_CMD_DHCP)
@@ -789,7 +791,8 @@ void bootp_request(void)
 	bootp_id += get_timer(0);
 	bootp_id = htonl(bootp_id);
 	bootp_add_id(bootp_id);
-	net_copy_u32(&bp->bp_id, &bootp_id);
+	bp_id = bp->bp_id;
+	net_copy_u32(&bp_id, &bootp_id);
 
 	/*
 	 * Calculate proper packet lengths taking into account the
@@ -959,6 +962,7 @@ static void dhcp_send_request_packet(struct bootp_hdr *bp_offer)
 	struct in_addr offered_ip;
 	struct in_addr zero_ip;
 	struct in_addr bcast_ip;
+	u32 bp_id, bp_id2;
 
 	debug("dhcp_send_request_packet: Sending DHCPREQUEST\n");
 	pkt = net_tx_packet;
@@ -993,7 +997,9 @@ static void dhcp_send_request_packet(struct bootp_hdr *bp_offer)
 	 * ID is the id of the OFFER packet
 	 */
 
-	net_copy_u32(&bp->bp_id, &bp_offer->bp_id);
+	bp_id2 = bp_offer->bp_id;
+	net_copy_u32(&bp_id, &bp_id2);
+	bp->bp_id = bp_id;
 
 	/*
 	 * Copy options from OFFER packet if present

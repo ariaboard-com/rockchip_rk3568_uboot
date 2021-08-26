@@ -174,7 +174,7 @@ static void rpc_req(int rpc_prog, int rpc_proc, uint32_t *data, int datalen)
 {
 	struct rpc_t rpc_pkt;
 	unsigned long id;
-	uint32_t *p;
+	char *p;
 	int pktlen;
 	int sport;
 
@@ -196,7 +196,7 @@ static void rpc_req(int rpc_prog, int rpc_proc, uint32_t *data, int datalen)
 		rpc_pkt.u.call.vers = htonl(2);	/* portmapper is version 2 */
 	}
 	rpc_pkt.u.call.proc = htonl(rpc_proc);
-	p = (uint32_t *)&(rpc_pkt.u.call.data);
+	p = (char *)&(rpc_pkt.u.call.data);
 
 	if (datalen)
 		memcpy((char *)p, (char *)data, datalen*sizeof(uint32_t));
@@ -577,9 +577,12 @@ static int nfs_lookup_reply(uchar *pkt, unsigned len)
 	return 0;
 }
 
-static int nfs3_get_attributes_offset(uint32_t *data)
+static int nfs3_get_attributes_offset(void *data)
 {
-	if (ntohl(data[1]) != 0) {
+	uint32_t flag;
+	memcpy(&flag, data + sizeof(uint32_t), sizeof(uint32_t));
+
+	if (ntohl(flag) != 0) {
 		/* 'attributes_follow' flag is TRUE,
 		 * so we have attributes on 21 dwords */
 		/* Skip unused values :
