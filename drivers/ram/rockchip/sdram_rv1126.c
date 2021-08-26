@@ -1964,7 +1964,7 @@ out:
 static int get_wrlvl_val(struct dram_info *dram,
 			 struct rv1126_sdram_params *sdram_params)
 {
-	u32 i, j, clk_skew;
+	int i, j, clk_skew;
 	void __iomem *phy_base = dram->phy;
 	u32 lp_stat;
 	int ret;
@@ -1982,8 +1982,7 @@ static int get_wrlvl_val(struct dram_info *dram,
 	for (j = 0; j < 2; j++)
 		for (i = 0; i < 4; i++)
 			wrlvl_result[j][i] =
-				readl(PHY_REG(phy_base,
-					      wrlvl_result_offset[j][i])) -
+				(readl(PHY_REG(phy_base, wrlvl_result_offset[j][i])) & 0x3f) -
 				clk_skew;
 
 	low_power_update(dram, lp_stat);
@@ -2096,8 +2095,8 @@ static int high_freq_training(struct dram_info *dram,
 				dqs_skew += wrlvl_result[j][i];
 		}
 	}
-	dqs_skew = dqs_skew / (sdram_params->ch.cap_info.rank *
-			       (1 << sdram_params->ch.cap_info.bw));
+	dqs_skew = dqs_skew /
+		   (int)(sdram_params->ch.cap_info.rank * (1 << sdram_params->ch.cap_info.bw));
 
 	clk_skew = 0x20 - dqs_skew;
 	dqs_skew = 0x20;
@@ -2629,7 +2628,6 @@ static u64 dram_detect_cap(struct dram_info *dram,
 			// cap_info->cs0_row = 16;
 			// cap_info->row_3_4 = 0;
 		}
-		cap_info->bw = 2;
 	}
 
 	pwrctl = readl(pctl_base + DDR_PCTL2_PWRCTL);
@@ -2641,31 +2639,27 @@ static u64 dram_detect_cap(struct dram_info *dram,
 		cs = 0;
 	cap_info->rank = cs + 1;
 
-	if (dram_type != LPDDR4 && dram_type != LPDDR4X) {
-		setbits_le32(PHY_REG(phy_base, 0xf), 0xf);
+	setbits_le32(PHY_REG(phy_base, 0xf), 0xf);
 
-		if (data_training(dram, 0, sdram_params, 0,
-				  READ_GATE_TRAINING) == 0) {
-			cap_info->bw = 2;
-		} else {
-			dq_map = readl(PHY_REG(phy_base, 0x4f));
-			for (i = 0; i < 4; i++) {
-				if (((dq_map >> (i * 2)) & 0x3) == 0)
-					byte0 = i;
-				if (((dq_map >> (i * 2)) & 0x3) == 1)
-					byte1 = i;
-			}
-			clrsetbits_le32(PHY_REG(phy_base, 0xf), PHY_DQ_WIDTH_MASK,
-					BIT(byte0) | BIT(byte1));
-			if (data_training(dram, 0, sdram_params, 0,
-					  READ_GATE_TRAINING) == 0)
-				cap_info->bw = 1;
-			else
-				cap_info->bw = 0;
+	if (data_training(dram, 0, sdram_params, 0, READ_GATE_TRAINING) == 0) {
+		cap_info->bw = 2;
+	} else {
+		dq_map = readl(PHY_REG(phy_base, 0x4f));
+		for (i = 0; i < 4; i++) {
+			if (((dq_map >> (i * 2)) & 0x3) == 0)
+				byte0 = i;
+			if (((dq_map >> (i * 2)) & 0x3) == 1)
+				byte1 = i;
 		}
-		if (cap_info->bw > 0)
-			cap_info->dbw = 1;
+		clrsetbits_le32(PHY_REG(phy_base, 0xf), PHY_DQ_WIDTH_MASK,
+				BIT(byte0) | BIT(byte1));
+		if (data_training(dram, 0, sdram_params, 0, READ_GATE_TRAINING) == 0)
+			cap_info->bw = 1;
+		else
+			cap_info->bw = 0;
 	}
+	if (cap_info->bw > 0)
+		cap_info->dbw = 1;
 
 	writel(pwrctl, pctl_base + DDR_PCTL2_PWRCTL);
 
@@ -3174,11 +3168,11 @@ static void pctl_modify_trfc(struct ddr_pctl_regs *pctl_regs,
 
 	case LPDDR4:
 	case LPDDR4X:
-		if (die_cap <= DIE_CAP_4GBIT)
+		if (die_cap <= DIE_CAP_2GBIT)
 			trfc_ns = 130;
-		else if (die_cap <= DIE_CAP_8GBIT)
+		else if (die_cap <= DIE_CAP_4GBIT)
 			trfc_ns = 180;
-		else if (die_cap <= DIE_CAP_16GBIT)
+		else if (die_cap <= DIE_CAP_8GBIT)
 			trfc_ns = 280;
 		else
 			trfc_ns = 380;
