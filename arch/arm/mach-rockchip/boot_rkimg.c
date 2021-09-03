@@ -214,6 +214,9 @@ struct blk_desc *rockchip_get_bootdev(void)
 {
 	int dev_type;
 	int devnum;
+	char *bootargs;
+	char boot_options[128] = {0};
+	const char *storage_node = NULL;
 
 	if (dev_desc)
 		return dev_desc;
@@ -226,6 +229,12 @@ struct blk_desc *rockchip_get_bootdev(void)
 	if (!dev_desc) {
 		printf("%s: Can't find dev_desc!\n", __func__);
 		return NULL;
+	}
+	storage_node = dev_desc->bdev->parent->name;
+	if (storage_node != NULL) {
+		bootargs = env_get("bootargs");
+		snprintf(boot_options, sizeof(boot_options), "%s storagenode=%s ", bootargs, storage_node);
+		env_update("bootargs", boot_options);
 	}
 
 #ifdef CONFIG_MMC
