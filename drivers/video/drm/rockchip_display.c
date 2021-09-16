@@ -1212,7 +1212,8 @@ static int load_bmp_logo(struct logo_info *logo, const char *bmp_name)
 			goto free_header;
 		}
 		pdst = get_display_buffer(size);
-
+	} else if(logo->rotation) {
+		pdst = get_display_buffer(size);
 	} else {
 		pdst = get_display_buffer(size);
 		dst = pdst;
@@ -1256,6 +1257,56 @@ static int load_bmp_logo(struct logo_info *logo, const char *bmp_name)
 		else
 			logo->ymirror = 1;
 	}
+
+	if (logo->rotation) {
+		void *dst_temp = NULL;
+		int height = logo->height;
+		int width = logo->width;
+		int byte = logo->bpp >> 3;
+		int newW = height & 0x3 ? (height & ~0x3) + 4 : height;
+		int newH = width;
+		int beforebmp_size =  height * width * byte;
+		int newbmp_size = newH * newW * byte;
+		int rotation = 0;
+
+		if (can_direct_logo(logo->bpp)) {
+			dst = get_display_buffer(beforebmp_size);
+			if (!dst) {
+				ret = -ENOMEM;
+				goto free_header;
+			}
+			if (bmpdecoder(pdst, dst, logo->bpp)) {
+				printf("failed to decode bmp %s\n", bmp_name);
+				ret = -EINVAL;
+				goto free_header;
+			}
+		}
+
+		dst_temp = dst;
+		dst = get_display_buffer(newbmp_size);
+		if (!dst) {
+			ret = -ENOMEM;
+			goto free_header;
+		}
+		memset(dst, 0, newbmp_size);
+
+		if((logo->rotation == ROCKCHIP_DISPLAY_ROTATION_90) || (logo->rotation == ROCKCHIP_DISPLAY_ROTATION_270)) {
+			logo->width = newW;
+			logo->height = newH;
+		}
+		rotation = bmprotation(dst, dst_temp, width, height, byte, logo->rotation);
+		if(rotation < 0) {
+			printf("failed to rotate logo\n");
+		}
+
+		flush_dcache_range((ulong)dst,
+					ALIGN((ulong)dst + newbmp_size,
+						CONFIG_SYS_CACHELINE_SIZE));
+
+		logo->offset = 0;
+		logo->ymirror = 0;
+	}
+
 	logo->mem = dst;
 
 	memcpy(&logo_cache->logo, logo, sizeof(*logo));
@@ -1314,6 +1365,7 @@ int rockchip_show_logo(void)
 
 	list_for_each_entry(s, &rockchip_display_list, head) {
 		s->logo.mode = s->logo_mode;
+		s->logo.rotation = s->logo_rotation;
 		if (load_bmp_logo(&s->logo, s->ulogo_name))
 			printf("failed to display uboot logo\n");
 		else
@@ -1710,6 +1762,16 @@ static int rockchip_display_probe(struct udevice *dev)
 			s->charge_logo_mode = ROCKCHIP_DISPLAY_FULLSCREEN;
 		else
 			s->charge_logo_mode = ROCKCHIP_DISPLAY_CENTER;
+		ret = ofnode_read_string_index(node, "logo,rotation", 0, &name);
+		if(!strcmp(name, "90")){
+			s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_90;
+		} else if (!strcmp(name, "180")){
+			s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_180;
+		} else if (!strcmp(name, "270")){
+			s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_270;
+		} else {
+			s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_0;
+		}
 
 		s->blob = blob;
 		s->panel_state.panel = panel;
