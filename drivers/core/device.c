@@ -97,8 +97,11 @@ static int device_bind_common(struct udevice *parent, const struct driver *drv,
 					debug("%s do not delete uboot dev: %s\n",
 					      __func__, dev->name);
 					return 0;
-				} else if (drv->id == UCLASS_REGULATOR) {
-					/* stay in dm tree, in order to handle exclusion */
+				} else if (drv->id == UCLASS_REGULATOR || !strcmp(dev->name, "gpio-regulator")) {
+					debug("%s do not delete uboot dev: %s\n",
+					      __func__, dev->name);
+
+					return 0;
 				} else {
 					list_del_init(&dev->uclass_node);
 				}
