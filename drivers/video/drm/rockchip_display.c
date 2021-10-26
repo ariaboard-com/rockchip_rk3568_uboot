@@ -1830,15 +1830,21 @@ static int rockchip_display_probe(struct udevice *dev)
 			s->charge_logo_mode = ROCKCHIP_DISPLAY_FULLSCREEN;
 		else
 			s->charge_logo_mode = ROCKCHIP_DISPLAY_CENTER;
-		ret = ofnode_read_string_index(node, "logo,rotation", 0, &name);
-		if(!strcmp(name, "90")){
-			s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_90;
-		} else if (!strcmp(name, "180")){
-			s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_180;
-		} else if (!strcmp(name, "270")){
-			s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_270;
-		} else {
-			s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_0;
+
+		int rotation = ofnode_read_u32_default(node, "logo,rotation", 0);
+		switch (rotation) {
+			case 90:
+				s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_90;
+				break;
+			case 180:
+				s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_180;
+				break;
+			case 270:
+				s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_270;
+				break;
+			default:
+				s->logo_rotation = ROCKCHIP_DISPLAY_ROTATION_0;
+				break;
 		}
 
 		s->force_output = ofnode_read_bool(node, "force-output");
