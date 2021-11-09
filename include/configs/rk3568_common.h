@@ -90,9 +90,14 @@
 	BOOTENV
 
 #undef RKIMG_BOOTCOMMAND
+/* boot_android ${devtype} ${devnum}; */
 #define RKIMG_BOOTCOMMAND		\
 	"boot_fit;"			\
-	"boot_android ${devtype} ${devnum};" \
+	"setenv bootargs_orig \"${bootargs}\";" \
+	"setenv bootargs \"${bootargs_orig} root=/dev/mmcblk1p2\";" \
+	"boot_android mmc 1;" \
+	"setenv bootargs \"${bootargs_orig} root=/dev/mmcblk0p6\";" \
+	"boot_android mmc 0;" \
 	"run distro_bootcmd;"
 #endif
 
