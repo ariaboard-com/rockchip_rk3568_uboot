@@ -28,22 +28,16 @@
 			press-threshold-microvolt = <9>;
 		};
 	};
-	
-	vcc_3v3: vcc_3v3 {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc_3v3";
-		regulator-always-on;
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-	};
-	
-	vcc_3v3_sd: vcc_3v3_sd {
-		compatible = "regulator-fixed";
-		regulator-name = "vcc_3v3_sd";
-		regulator-always-on;
-		gpio = <&gpio0 RK_PB6 GPIO_ACTIVE_HIGH>;
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
+
+        leds {
+		compatible = "gpio-leds";
+		status = "okay";
+
+		sd_pwr_led {
+			label = "sd_card_led";
+			gpios = <&gpio0 RK_PB6 GPIO_ACTIVE_LOW>;
+			default-state = "on";
+		};
 	};
 };
 
@@ -122,13 +116,4 @@
 	status = "okay";
 };
 
-&sdmmc0 {
-	supports-sd;
-	bus-width = <4>;
-	cap-sd-highspeed;
-	disable-wp;
-	no-1-8-v;
-	vmmc-supply = <&vcc_3v3_sd>;
-	vqmmc-supply = <&vcc_3v3>;
-};
 

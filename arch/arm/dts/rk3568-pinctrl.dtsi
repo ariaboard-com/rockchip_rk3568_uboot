@@ -1525,10 +1525,6 @@
 			rockchip,pins =
 				<0 RK_PB5 1 &pcfg_pull_up>;
 		};
-		sdmmc0_pwren: sdmmc0-pwren {
-			rockchip,pins =
-				<0 RK_PB6 1 &pcfg_pull_none>;
-		};
 	};
 	sdmmc1 {
 		sdmmc1_bus4: sdmmc1-bus4 {
