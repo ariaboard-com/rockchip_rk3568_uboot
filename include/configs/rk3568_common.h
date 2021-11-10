@@ -91,6 +91,7 @@
 
 #undef RKIMG_BOOTCOMMAND
 #define RKIMG_BOOTCOMMAND		\
+	"gpio clear 014;" \
 	"setenv bootargs_orig \"${bootargs}\";" \
 	"setenv bootargs \"${bootargs_orig} root=/dev/mmcblk1p2\";" \
 	"run bootcmd_mmc1;" \

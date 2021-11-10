@@ -28,17 +28,6 @@
 			press-threshold-microvolt = <9>;
 		};
 	};
-
-        leds: gpio-leds {
-		compatible = "gpio-leds";
-		status = "okay";
-
-		sd_card_led {
-			label = "sd_card_led";
-			gpios = <&gpio0 RK_PB6 GPIO_ACTIVE_LOW>;
-			default-state = "on";
-		};
-	};
 };
 
 &gmac0 {

@@ -112,6 +112,7 @@ static int led_gpio_bind(struct udevice *parent)
 		const char *label;
 
 		label = ofnode_read_string(node, "label");
+printf("NODE=%s, LABEL=%p\n", ofnode_get_name(node), label);
 		if (!label) {
 			debug("%s: node %s has no label\n", __func__,
 			      ofnode_get_name(node));
