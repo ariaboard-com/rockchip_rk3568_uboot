@@ -105,12 +105,3 @@
 	status = "okay";
 };
 
-&gpio0 {
-        sd-pwren {
-                gpio-hog;
-                gpios = <RK_PB6 GPIO_ACTIVE_LOW>;
-                output-high;
-                line-name = "sd-pwren";
-        };
-};
-

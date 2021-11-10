@@ -1527,7 +1527,7 @@
 		};
 		sdmmc0_pwren: sdmmc0-pwren {
 			rockchip,pins =
-				<0 RK_PA5 1 &pcfg_pull_none>;
+				<0 RK_PB6 1 &pcfg_pull_none>;
 		};
 	};
 	sdmmc1 {
