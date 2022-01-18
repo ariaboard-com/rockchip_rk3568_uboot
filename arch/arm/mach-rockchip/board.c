@@ -17,6 +17,7 @@
 #include <debug_uart.h>
 #include <dm.h>
 #include <dvfs.h>
+#include <fdt_support.h>
 #include <io-domain.h>
 #include <image.h>
 #include <key.h>
@@ -341,18 +342,8 @@ static void cmdline_handle(void)
 {
 	struct blk_desc *dev_desc;
 
-#ifdef CONFIG_ROCKCHIP_PRELOADER_ATAGS
-	struct tag *t;
+	param_parse_pubkey_fuse_programmed();
 
-	t = atags_get_tag(ATAG_PUB_KEY);
-	if (t) {
-		/* Pass if efuse/otp programmed */
-		if (t->u.pub_key.flag == PUBKEY_FUSE_PROGRAMMED)
-			env_update("bootargs", "fuse.programmed=1");
-		else
-			env_update("bootargs", "fuse.programmed=0");
-	}
-#endif
 	dev_desc = rockchip_get_bootdev();
 	if (!dev_desc)
 		return;
@@ -433,7 +424,7 @@ static void board_debug_init(void)
 		printf("Cmd interface: disabled\n");
 }
 
-#ifdef CONFIG_MTD_BLK
+#if defined(CONFIG_MTD_BLK) && defined(CONFIG_USING_KERNEL_DTB)
 static void board_mtd_blk_map_partitions(void)
 {
 	struct blk_desc *dev_desc;
@@ -447,6 +438,10 @@ static void board_mtd_blk_map_partitions(void)
 int board_init(void)
 {
 	board_debug_init();
+	/* optee select security level */
+#ifdef CONFIG_OPTEE_CLIENT
+	trusty_select_security_level();
+#endif
 
 #ifdef DEBUG
 	soc_clk_dump();
@@ -684,31 +679,10 @@ int board_init_f_boot_flags(void)
 {
 	int boot_flags = 0;
 
-	/* pre-loader serial */
-#if defined(CONFIG_ROCKCHIP_PRELOADER_SERIAL) && \
-    defined(CONFIG_ROCKCHIP_PRELOADER_ATAGS)
-	struct tag *t;
+	param_parse_pre_serial();
 
-	t = atags_get_tag(ATAG_SERIAL);
-	if (t) {
-		gd->serial.using_pre_serial = 1;
-		gd->serial.enable = t->u.serial.enable;
-		gd->serial.baudrate = t->u.serial.baudrate;
-		gd->serial.addr = t->u.serial.addr;
-		gd->serial.id = t->u.serial.id;
-		gd->baudrate = CONFIG_BAUDRATE;
-		if (!t->u.serial.enable)
-			boot_flags |= GD_FLG_DISABLE_CONSOLE;
-		debug("preloader: enable=%d, addr=0x%lx, baudrate=%d, id=%d\n",
-		      gd->serial.enable, gd->serial.addr,
-		      gd->serial.baudrate, gd->serial.id);
-	} else
-#endif
-	{
-		gd->baudrate = CONFIG_BAUDRATE;
-		gd->serial.baudrate = CONFIG_BAUDRATE;
-		gd->serial.addr = CONFIG_DEBUG_UART_BASE;
-	}
+	if (!gd->serial.enable)
+		boot_flags |= GD_FLG_DISABLE_CONSOLE;
 
 	/* The highest priority to turn off (override) console */
 #if defined(CONFIG_DISABLE_CONSOLE)
@@ -1043,6 +1017,7 @@ char *board_fdt_chosen_bootargs(void *fdt)
 	const char *bootargs;
 	int nodeoffset;
 	int i, dump;
+	char *msg = "kernel";
 
 	/* debug */
 	hotkey_run(HK_INITCALL);
@@ -1059,9 +1034,17 @@ char *board_fdt_chosen_bootargs(void *fdt)
 		bootargs = fdt_getprop(fdt, nodeoffset, arr_bootargs[i], NULL);
 		if (!bootargs)
 			continue;
+#ifdef CONFIG_ENVF
+		/* Allow "bootargs_envf" to replace "bootargs" */
+		if (!strcmp("bootargs", arr_bootargs[i]) &&
+		    env_get("bootargs_envf")) {
+			bootargs = env_get("bootargs_envf");
+			msg = "envf";
+		}
+#endif
 		if (dump)
-			printf("## bootargs(kernel-%s): %s\n\n",
-			       arr_bootargs[i], bootargs);
+			printf("## bootargs(%s-%s): %s\n\n",
+			       msg, arr_bootargs[i], bootargs);
 		/*
 		 * Append kernel bootargs
 		 * If use AB system, delete default "root=" which route
