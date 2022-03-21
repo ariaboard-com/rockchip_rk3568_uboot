@@ -35,6 +35,8 @@
 		i2c3 = &i2c3;
 		i2c4 = &i2c4;
 		i2c5 = &i2c5;
+		lvds0 = &lvds0;
+		lvds1 = &lvds1;
 		serial0 = &uart0;
 		serial1 = &uart1;
 		serial2 = &uart2;
@@ -135,60 +137,7 @@
 
 	display_subsystem: display-subsystem {
 		compatible = "rockchip,display-subsystem";
-		memory-region = <&drm_logo>, <&drm_cubic_lut>;
-		memory-region-names = "drm-logo", "drm-cubic-lut";
 		ports = <&vop_out>;
-
-		route {
-			route_dsi0: route-dsi0 {
-				status = "disabled";
-				logo,uboot = "logo.bmp";
-				logo,kernel = "logo_kernel.bmp";
-				logo,mode = "center";
-				charge_logo,mode = "center";
-				connect = <&vp0_out_dsi0>;
-			};
-			route_dsi1: route-dsi1 {
-				status = "disabled";
-				logo,uboot = "logo.bmp";
-				logo,kernel = "logo_kernel.bmp";
-				logo,mode = "center";
-				charge_logo,mode = "center";
-				connect = <&vp0_out_dsi1>;
-			};
-			route_edp: route-edp {
-				status = "disabled";
-				logo,uboot = "logo.bmp";
-				logo,kernel = "logo_kernel.bmp";
-				logo,mode = "center";
-				charge_logo,mode = "center";
-				connect = <&vp0_out_edp>;
-			};
-			route_hdmi: route-hdmi {
-				status = "disabled";
-				logo,uboot = "logo.bmp";
-				logo,kernel = "logo_kernel.bmp";
-				logo,mode = "center";
-				charge_logo,mode = "center";
-				connect = <&vp1_out_hdmi>;
-			};
-			route_lvds: route-lvds {
-				status = "disabled";
-				logo,uboot = "logo.bmp";
-				logo,kernel = "logo_kernel.bmp";
-				logo,mode = "center";
-				charge_logo,mode = "center";
-				connect = <&vp1_out_lvds>;
-			};
-			route_rgb: route-rgb {
-				status = "disabled";
-				logo,uboot = "logo.bmp";
-				logo,kernel = "logo_kernel.bmp";
-				logo,mode = "center";
-				charge_logo,mode = "center";
-				connect = <&vp2_out_rgb>;
-			};
-		};
 	};
 
 	mpp_srv: mpp-srv {
@@ -201,22 +150,6 @@
 	psci: psci {
 		compatible = "arm,psci-1.0";
 		method = "smc";
-	};
-
-	reserved_memory: reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		drm_logo: drm-logo@00000000 {
-			compatible = "rockchip,drm-logo";
-			reg = <0x0 0x0 0x0 0x0>;
-		};
-
-		drm_cubic_lut: drm-cubic-lut@00000000 {
-			compatible = "rockchip,drm-cubic-lut";
-			reg = <0x0 0x0 0x0 0x0>;
-		};
 	};
 
 	thermal_zones: thermal-zones {
@@ -489,7 +422,7 @@
 			status = "disabled";
 		};
 
-		lvds: lvds {
+		lvds0: lvds0 {
 			compatible = "rockchip,rk3568-lvds";
 			phys = <&video_phy0>;
 			phy-names = "phy";
@@ -504,16 +437,42 @@
 					#address-cells = <1>;
 					#size-cells = <0>;
 
-					lvds_in_vp1: endpoint@1 {
-						reg = <1>;
-						remote-endpoint = <&vp1_out_lvds>;
-						status = "disabled";
+					lvds0_in_vp1: endpoint@0 {
+						reg = <0>;
+						remote-endpoint = <&vp1_out_lvds0>;
 					};
 
-					lvds_in_vp2: endpoint@2 {
-						reg = <2>;
-						remote-endpoint = <&vp2_out_lvds>;
-						status = "disabled";
+					lvds0_in_vp2: endpoint@1 {
+						reg = <1>;
+						remote-endpoint = <&vp2_out_lvds0>;
+					};
+				};
+			};
+		};
+
+		lvds1: lvds1 {
+			compatible = "rockchip,rk3568-lvds";
+			phys = <&video_phy1>;
+			phy-names = "phy";
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					lvds1_in_vp1: endpoint@0 {
+						reg = <0>;
+						remote-endpoint = <&vp1_out_lvds1>;
+					};
+
+					lvds1_in_vp2: endpoint@1 {
+						reg = <1>;
+						remote-endpoint = <&vp2_out_lvds1>;
 					};
 				};
 			};
@@ -534,12 +493,12 @@
 					#address-cells = <1>;
 					#size-cells = <0>;
 
-					rgb_in_vp2: endpoint@2 {
-						reg = <2>;
+					rgb_in_vp2: endpoint@0 {
+						reg = <0>;
 						remote-endpoint = <&vp2_out_rgb>;
-						status = "disabled";
 					};
 				};
+
 			};
 		};
 
@@ -1278,8 +1237,8 @@
 
 	vop: vop@fe040000 {
 		compatible = "rockchip,rk3568-vop";
-		reg = <0x0 0xfe040000 0x0 0x3000>, <0x0 0xfe044000 0x0 0x1000>;
-		reg-names = "regs", "gamma_lut";
+		reg = <0x0 0xfe040000 0x0 0x3000>;
+		reg-names = "regs";
 		rockchip,grf = <&grf>;
 		interrupts = <GIC_SPI 148 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&cru ACLK_VOP>, <&cru HCLK_VOP>, <&cru DCLK_VOP0>, <&cru DCLK_VOP1>, <&cru DCLK_VOP2>;
@@ -1292,7 +1251,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			vp0: port@0 {
+			port@0 {
 				#address-cells = <1>;
 				#size-cells = <0>;
 				reg = <0>;
@@ -1318,7 +1277,7 @@
 				};
 			};
 
-			vp1: port@1 {
+			port@1 {
 				#address-cells = <1>;
 				#size-cells = <0>;
 				reg = <1>;
@@ -1343,25 +1302,36 @@
 					remote-endpoint = <&hdmi_in_vp1>;
 				};
 
-				vp1_out_lvds: endpoint@4 {
+				vp1_out_lvds0: endpoint@4 {
 					reg = <4>;
-					remote-endpoint = <&lvds_in_vp1>;
+					remote-endpoint = <&lvds0_in_vp1>;
 				};
+
+				vp1_out_lvds1: endpoint@5 {
+					reg = <5>;
+					remote-endpoint = <&lvds1_in_vp1>;
+				};
+
 			};
 
-			vp2: port@2 {
+			port@2 {
 				#address-cells = <1>;
 				#size-cells = <0>;
 
 				reg = <2>;
 
-				vp2_out_lvds: endpoint@0 {
+				vp2_out_lvds0: endpoint@0 {
 					reg = <0>;
-					remote-endpoint = <&lvds_in_vp2>;
+					remote-endpoint = <&lvds0_in_vp2>;
 				};
 
-				vp2_out_rgb: endpoint@1 {
+				vp2_out_lvds1: endpoint@1 {
 					reg = <1>;
+					remote-endpoint = <&lvds1_in_vp2>;
+				};
+
+				vp2_out_rgb: endpoint@2 {
+					reg = <2>;
 					remote-endpoint = <&rgb_in_vp2>;
 				};
 			};
