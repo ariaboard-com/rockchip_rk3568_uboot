@@ -229,31 +229,17 @@ int fb_set_reboot_flag(void)
 static int boot_from_udisk(void)
 {
 	struct blk_desc *desc;
-	char *devtype;
-	char *devnum;
-
-	devtype = env_get("devtype");
-	devnum = env_get("devnum");
-
-	/* Booting priority: mmc1 > udisk */
-	if (!strcmp(devtype, "mmc") && !strcmp(devnum, "1"))
-		return 0;
 
 	if (!run_command("usb start", -1)) {
 		desc = blk_get_devnum_by_type(IF_TYPE_USB, 0);
 		if (!desc) {
 			printf("No usb device found\n");
 			return -ENODEV;
-		}
-
-		if (!run_command("rkimgtest usb 0", -1)) {
+		} else {
 			rockchip_set_bootdev(desc);
 			env_set("devtype", "usb");
 			env_set("devnum", "0");
 			printf("Boot from usb 0\n");
-		} else {
-			printf("No usb dev 0 found\n");
-			return -ENODEV;
 		}
 	}
 
