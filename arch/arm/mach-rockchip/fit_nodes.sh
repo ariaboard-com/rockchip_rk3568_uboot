@@ -12,6 +12,10 @@ rm -f ${srctree}/*.digest ${srctree}/*.bin.gz ${srctree}/bl31_0x*.bin
 # compression
 if [ "${COMPRESSION}" == "gzip" ]; then
 	SUFFIX=".gz"
+	COMPRESS_CMD="gzip -kf9"
+elif [ "${COMPRESSION}" == "lzma" ]; then
+	SUFFIX=".lzma"
+	COMPRESS_CMD="${srctree}/scripts/compress.sh lzma"
 else
 	COMPRESSION="none"
 	SUFFIX=
@@ -20,31 +24,32 @@ fi
 # nodes
 function gen_uboot_node()
 {
+	UBOOT="u-boot-nodtb.bin"
 	echo "		uboot {
 			description = \"U-Boot\";
-			data = /incbin/(\"./u-boot-nodtb.bin${SUFFIX}\");
+			data = /incbin/(\"${UBOOT}${SUFFIX}\");
 			type = \"standalone\";
 			arch = \"${U_ARCH}\";
 			os = \"U-Boot\";
 			compression = \"${COMPRESSION}\";
-			load = <"${UBOOT_LOAD_ADDR}">;
-			hash {
-				algo = \"sha256\";
-			};"
-	if [ "${COMPRESSION}" == "gzip" ]; then
-		echo "			digest {
-				value = /incbin/(\"./u-boot-nodtb.bin.digest\");
-				algo = \"sha256\";
-			};"
-		openssl dgst -sha256 -binary -out u-boot-nodtb.bin.digest u-boot-nodtb.bin
-		UBOOT_SZ=`ls -l u-boot-nodtb.bin | awk '{ print $5 }'`
+			load = <"${UBOOT_LOAD_ADDR}">;"
+	if [ "${COMPRESSION}" != "none" ]; then
+		openssl dgst -sha256 -binary -out ${UBOOT}.digest ${UBOOT}
+		UBOOT_SZ=`ls -l ${UBOOT} | awk '{ print $5 }'`
 		if [ ${UBOOT_SZ} -gt 0 ]; then
-			gzip -k -f -9 ${srctree}/u-boot-nodtb.bin
+			${COMPRESS_CMD} ${srctree}/${UBOOT}
 		else
-			touch ${srctree}/u-boot-nodtb.bin.gz
+			touch ${srctree}/${UBOOT}${SUFFIX}
 		fi
+		echo "		digest {
+				value = /incbin/(\"./${UBOOT}.digest\");
+				algo = \"sha256\";
+			};"
 	fi
-	echo "		};"
+	echo "			hash {
+				algo = \"sha256\";
+			};
+		};"
 }
 
 function gen_fdt_node()
@@ -58,8 +63,7 @@ function gen_fdt_node()
 			hash {
 				algo = \"sha256\";
 			};
-		};
-	};"
+		};"
 };
 
 function gen_kfdt_node()
@@ -89,17 +93,17 @@ function gen_bl31_node()
 	${srctree}/arch/arm/mach-rockchip/decode_bl31.py
 
 	NUM=1
-	for NAME in `ls -l bl31_0x*.bin | sort --key=5 -nr | awk '{ print $9 }'`
+	for ATF in `ls -l bl31_0x*.bin | sort --key=5 -nr | awk '{ print $9 }'`
 	do
-		ATF_LOAD_ADDR=`echo ${NAME} | awk -F "_" '{ printf $2 }' | awk -F "." '{ printf $1 }'`
+		ATF_LOAD_ADDR=`echo ${ATF} | awk -F "_" '{ printf $2 }' | awk -F "." '{ printf $1 }'`
 		# only atf-1 support compress
-		if [ "${COMPRESSION}" == "gzip" -a ${NUM} -eq 1  ]; then
-			openssl dgst -sha256 -binary -out ${NAME}.digest ${NAME}
-			gzip -k -f -9 ${NAME}
+		if [ "${COMPRESSION}" != "none" -a ${NUM} -eq 1  ]; then
+			openssl dgst -sha256 -binary -out ${ATF}.digest ${ATF}
+			${COMPRESS_CMD} ${ATF}
 
 			echo "		atf-${NUM} {
 			description = \"ARM Trusted Firmware\";
-			data = /incbin/(\"./${NAME}${SUFFIX}\");
+			data = /incbin/(\"./${ATF}${SUFFIX}\");
 			type = \"firmware\";
 			arch = \"${ARCH}\";
 			os = \"arm-trusted-firmware\";
@@ -109,14 +113,14 @@ function gen_bl31_node()
 				algo = \"sha256\";
 			};
 			digest {
-				value = /incbin/(\"./${NAME}.digest\");
+				value = /incbin/(\"./${ATF}.digest\");
 				algo = \"sha256\";
 			};
 		};"
 		else
 			echo "		atf-${NUM} {
 			description = \"ARM Trusted Firmware\";
-			data = /incbin/(\"./${NAME}\");
+			data = /incbin/(\"./${ATF}\");
 			type = \"firmware\";
 			arch = \"${ARCH}\";
 			os = \"arm-trusted-firmware\";
@@ -147,29 +151,32 @@ function gen_bl32_node()
 			ENTRY="entry = <0x${TEE_LOAD_ADDR}>;"
 		fi
 	fi
+
+	TEE="tee.bin"
 	echo "		optee {
 			description = \"OP-TEE\";
-			data = /incbin/(\"./tee.bin${SUFFIX}\");
+			data = /incbin/(\"${TEE}${SUFFIX}\");
 			type = \"firmware\";
 			arch = \"${ARCH}\";
 			os = \"op-tee\";
 			compression = \"${COMPRESSION}\";
-			load = <"0x${TEE_LOAD_ADDR}">;
 			${ENTRY}
-			hash {
-				algo = \"sha256\";
-			};"
-	if [ "${COMPRESSION}" == "gzip" ]; then
+			load = <"0x${TEE_LOAD_ADDR}">;"
+	if [ "${COMPRESSION}" != "none" ]; then
+		openssl dgst -sha256 -binary -out ${TEE}.digest ${TEE}
+		${COMPRESS_CMD} ${TEE}
 		echo "			digest {
-				value = /incbin/(\"./tee.bin.digest\");
+				value = /incbin/(\"./${TEE}.digest\");
 				algo = \"sha256\";
 			};"
-		openssl dgst -sha256 -binary -out tee.bin.digest tee.bin
-		gzip -k -f -9 tee.bin
 	fi
-
+	echo "			hash {
+				algo = \"sha256\";
+			};
+		};"
 	LOADABLE_OPTEE=", \"optee\""
-	echo "		};"
+	FIRMWARE_OPTEE="firmware = \"optee\";"
+	FIRMWARE_SIGN=", \"firmware\""
 }
 
 function gen_mcu_node()
@@ -198,19 +205,20 @@ function gen_mcu_node()
 			arch = \"riscv\";
 			data = /incbin/(\"./${MCU}.bin${SUFFIX}\");
 			compression = \"${COMPRESSION}\";
-			load = <0x"${MCU_ADDR}">;
-			hash {
-				algo = \"sha256\";
-			};"
-		if [ "${COMPRESSION}" == "gzip" ]; then
-			echo "			digest {
+			load = <0x"${MCU_ADDR}">;"
+		if [ "${COMPRESSION}" != "none" ]; then
+			openssl dgst -sha256 -binary -out ${MCU}.bin.digest ${MCU}.bin
+			${COMPRESS_CMD} ${MCU}.bin
+		echo "			digest {
 				value = /incbin/(\"./${MCU}.bin.digest\");
 				algo = \"sha256\";
 			};"
-			openssl dgst -sha256 -binary -out ${MCU}.bin.digest ${MCU}.bin
-			gzip -k -f -9 ${MCU}.bin
 		fi
-		echo "		};"
+		echo "			hash {
+				algo = \"sha256\";
+			};
+		};"
+
 		if [ ${n} -eq 0 ]; then
 			STANDALONE_LIST=${STANDALONE_LIST}"\"${MCU}\""
 		else
@@ -249,19 +257,19 @@ function gen_loadable_node()
 			arch = \"${ARCH}\";
 			data = /incbin/(\"./${LOAD}.bin${SUFFIX}\");
 			compression = \"${COMPRESSION}\";
-			load = <0x"${LOAD_ADDR}">;
-			hash {
-				algo = \"sha256\";
-			};"
-		if [ "${COMPRESSION}" == "gzip" ]; then
-			echo "			digest {
+			load = <0x"${LOAD_ADDR}">;"
+		if [ "${COMPRESSION}" != "none" ]; then
+			openssl dgst -sha256 -binary -out ${LOAD}.bin.digest ${LOAD}.bin
+			${COMPRESS_CMD} ${LOAD}.bin
+	echo "			digest {
 				value = /incbin/(\"./${LOAD}.bin.digest\");
 				algo = \"sha256\";
 			};"
-			openssl dgst -sha256 -binary -out ${LOAD}.bin.digest ${LOAD}.bin
-			gzip -k -f -9 ${LOAD}.bin
 		fi
-		echo "		};"
+		echo "			hash {
+				algo = \"sha256\";
+			};
+		};"
 
 		LOADABLE_OTHER=${LOADABLE_OTHER}", \"${LOAD}\""
 	done
@@ -292,7 +300,8 @@ PLATFORM=`sed -n "/CONFIG_DEFAULT_DEVICE_TREE/p" .config | awk -F "=" '{ print $
 if grep  -q '^CONFIG_FIT_ENABLE_RSASSA_PSS_SUPPORT=y' .config ; then
 	ALGO_PADDING="				padding = \"pss\";"
 fi
-echo "
+echo "	};
+
 	configurations {
 		default = \"conf\";
 		conf {
@@ -320,13 +329,14 @@ PLATFORM=`sed -n "/CONFIG_DEFAULT_DEVICE_TREE/p" .config | awk -F "=" '{ print $
 if grep  -q '^CONFIG_FIT_ENABLE_RSASSA_PSS_SUPPORT=y' .config ; then
         ALGO_PADDING="                          padding = \"pss\";"
 fi
-echo "
+echo "	};
+
 	configurations {
 		default = \"conf\";
 		conf {
 			description = \"${PLATFORM}\";
 			rollback-index = <0x0>;
-			firmware = \"optee\";
+			${FIRMWARE_OPTEE}
 			loadables = \"uboot\"${LOADABLE_OTHER};
 			${STANDALONE_MCU}
 			fdt = \"fdt\"${PROP_KERN_DTB};
@@ -334,7 +344,7 @@ echo "
 				algo = \"sha256,rsa2048\";
 				${ALGO_PADDING}
 				key-name-hint = \"dev\";
-				sign-images = \"fdt\", \"firmware\", \"loadables\"${STANDALONE_SIGN};
+				sign-images = \"fdt\", \"loadables\"${FIRMWARE_SIGN}${STANDALONE_SIGN};
 			};
 		};
 	};
