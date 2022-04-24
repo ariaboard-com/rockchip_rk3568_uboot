@@ -1962,6 +1962,9 @@ static int rockchip_display_probe(struct udevice *dev)
 
 					vp_id = ofnode_read_u32_default(vp_node, "reg", 0);
 					ret = ofnode_read_u32_default(vp_node, "rockchip,plane-mask", 0);
+					s->crtc_state.crtc->vps[vp_id].rg_swap = ofnode_read_bool(vp_node, "rg-swap");
+					s->crtc_state.crtc->vps[vp_id].rb_swap = ofnode_read_bool(vp_node, "rb-swap");
+					s->crtc_state.crtc->vps[vp_id].bg_swap = ofnode_read_bool(vp_node, "bg-swap");
 
 					cursor_plane = ofnode_read_u32_default(vp_node, "cursor-win-id", -1);
 					s->crtc_state.crtc->vps[vp_id].cursor_plane = cursor_plane;

@@ -15,6 +15,9 @@ struct rockchip_vp {
 	int output_type;
 	u32 plane_mask;
 	int cursor_plane;
+	bool rg_swap;
+	bool rb_swap;
+	bool bg_swap;
 };
 
 struct rockchip_crtc {

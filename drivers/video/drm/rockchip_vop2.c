@@ -182,6 +182,8 @@
 #define DATA_SWAP_MASK				0x1f
 #define DATA_SWAP_SHIFT				8
 #define DSP_RB_SWAP				2
+#define DSP_RG_SWAP				4
+#define DSP_BG_SWAP				1
 #define CORE_DCLK_DIV_EN_SHIFT			4
 #define P2I_EN_SHIFT				5
 #define DSP_FILED_POL				6
@@ -2184,9 +2186,8 @@ static int rockchip_vop2_init(struct display_state *state)
 				DATA_SWAP_MASK, DATA_SWAP_SHIFT, DSP_RB_SWAP,
 				false);
 	else
-		vop2_mask_write(vop2, RK3568_VP0_DSP_CTRL + vp_offset,
-				DATA_SWAP_MASK, DATA_SWAP_SHIFT, 0,
-				false);
+		vop2_mask_write(vop2, RK3568_VP0_DSP_CTRL + vp_offset, DATA_SWAP_MASK,
+				DATA_SWAP_SHIFT, cstate->crtc->vps[cstate->crtc_id].bg_swap << 0 | cstate->crtc->vps[cstate->crtc_id].rb_swap << 1 | cstate->crtc->vps[cstate->crtc_id].rg_swap << 2, false);
 
 	vop2_mask_write(vop2, RK3568_VP0_DSP_CTRL + vp_offset, OUT_MODE_MASK,
 			OUT_MODE_SHIFT, conn_state->output_mode, false);
