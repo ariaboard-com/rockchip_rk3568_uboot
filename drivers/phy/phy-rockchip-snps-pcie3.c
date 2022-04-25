@@ -160,6 +160,13 @@ static int rochchip_p3phy_init(struct phy *phy)
 	reset_deassert(&priv->p30phy);
 	udelay(5);
 
+#ifdef CONFIG_ROCKCHIP_RK3568
+	/* Updata RX VCO calibration controls */
+	writel(0x2800, priv->mmio + (0x104a << 2));
+	writel(0x2800, priv->mmio + (0x114a << 2));
+	udelay(10);
+#endif
+
 	return 0;
 }
 
