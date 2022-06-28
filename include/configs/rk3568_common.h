@@ -89,9 +89,8 @@
 	RKIMG_DET_BOOTDEV \
 	BOOTENV
 
+
 #undef RKIMG_BOOTCOMMAND
-
-
 #ifdef CONFIG_ROCKCHIP_ANDROID_BOOT_FIRST
 #define RKIMG_BOOTCOMMAND		\
 	"gpio clear 014;" \
@@ -102,7 +101,6 @@
 	"run bootcmd_mmc0;" \
 	"boot_android ${devtype} ${devnum};" \
 	"run distro_bootcmd;"
-#endif
 #else
 #define RKIMG_BOOTCOMMAND		\
 	"gpio clear 014;" \
@@ -113,6 +111,7 @@
         "boot_fit;" \
 	"run distro_bootcmd;"
 #endif
+
 #endif
 
 /* rockchip ohci host driver */
