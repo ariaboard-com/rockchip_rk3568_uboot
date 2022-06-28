@@ -95,6 +95,7 @@
 	"setenv bootargs_orig \"${bootargs}\";" \
 	"setenv bootargs \"${bootargs_orig} root=/dev/mmcblk1p2\";" \
 	"run bootcmd_mmc1;" \
+	"mmc dev ${devnum};" \
 	"setenv bootargs \"${bootargs_orig} root=/dev/mmcblk0p6\";" \
 	"boot_fit;"			\
 	"boot_android ${devtype} ${devnum};" \
