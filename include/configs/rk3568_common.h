@@ -98,7 +98,9 @@
 	"setenv bootargs \"${bootargs_orig} root=/dev/mmcblk1p2\";" \
 	"run bootcmd_mmc1;" \
 	"setenv bootargs \"${bootargs_orig}\";" \
-	"boot_android ${devtype} ${devnum};" \
+	"setenv devnum 0;" \
+	"mmc dev ${devnum};" \
+	"boot_android mmc ${devnum};" \
 	"run distro_bootcmd;"
 #else
 #define RKIMG_BOOTCOMMAND		\
