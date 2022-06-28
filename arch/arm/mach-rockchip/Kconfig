@@ -881,6 +881,12 @@ config TRUST_SHA_MODE
 	  The SHA mode for tools to pack, the mode id can be:
 	  0: none; 1: sha1; 2: sha256 RK big endian; 3: sha256 little endian.
 
+config ROCKCHIP_ANDROID_BOOT_FIRST
+	bool "ROCKCHIP Android Boot First"
+	default n
+	help
+	  Make Android boot first.
+
 source "arch/arm/mach-rockchip/px30/Kconfig"
 source "arch/arm/mach-rockchip/rk3036/Kconfig"
 source "arch/arm/mach-rockchip/rk3066/Kconfig"
