@@ -98,29 +98,6 @@ struct header0_info {
 };
 
 /**
- * struct header0_info_v2 - from rk35 on boot rom using the new header block
- *
- * This is stored at SD card block 64 (where each block is 512 bytes)
- *
- * @magic:	Magic (must be RK_MAGIC_V2)
- * @size_and_nimage:	[31:16]number of images;[15:0]
- *			offset to hash field of header(unit as 4Byte)
- * @boot_flag:	[3:0]hash type(0:none,1:sha256,2:sha512)
- * @signature:	hash or signature for header info
- *
- */
-struct header0_info_v2 {
-	uint32_t magic;
-	uint8_t reserved[4];
-	uint32_t size_and_nimage;
-	uint32_t boot_flag;
-	uint8_t reserved1[104];
-	struct image_entry images[4];
-	uint8_t reserved2[1064];
-	uint8_t hash[512];
-};
-
-/**
  * struct header1 info
  */
 struct header1_info {
