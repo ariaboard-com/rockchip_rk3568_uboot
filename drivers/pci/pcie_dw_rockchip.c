@@ -36,6 +36,7 @@ struct rk_pcie {
 	struct pci_region	io;
 	struct pci_region	mem;
 	bool		is_bifurcation;
+	u32 gen;
 };
 
 enum {
@@ -534,6 +535,8 @@ static int rk_pcie_link_up(struct rk_pcie *priv, u32 cap_speed)
 			dev_info(priv->dev, "PCIe Link up, LTSSM is 0x%x\n",
 				 rk_pcie_readl_apb(priv, PCIE_CLIENT_LTSSM_STATUS));
 			rk_pcie_debug_dump(priv);
+			/* Link maybe in Gen switch recovery but we need to wait more 1s */
+			msleep(1000);
 			return 0;
 		}
 
@@ -544,8 +547,6 @@ static int rk_pcie_link_up(struct rk_pcie *priv, u32 cap_speed)
 	}
 
 	dev_err(priv->dev, "PCIe-%d Link Fail\n", priv->dev->seq);
-	/* Link maybe in Gen switch recovery but we need to wait more 1s */
-	msleep(1000);
 	return -EINVAL;
 }
 
@@ -558,7 +559,7 @@ static int rockchip_pcie_init_port(struct udevice *dev)
 
 	/* Set power and maybe external ref clk input */
 	if (priv->vpcie3v3) {
-		ret = regulator_set_value(priv->vpcie3v3, 3300000);
+		ret = regulator_set_enable(priv->vpcie3v3, true);
 		if (ret) {
 			dev_err(priv->dev, "failed to enable vpcie3v3 (ret=%d)\n",
 				ret);
@@ -608,7 +609,7 @@ static int rockchip_pcie_init_port(struct udevice *dev)
 	rk_pcie_writel_apb(priv, 0x0, 0xf00040);
 	rk_pcie_setup_host(priv);
 
-	ret = rk_pcie_link_up(priv, LINK_SPEED_GEN_3);
+	ret = rk_pcie_link_up(priv, priv->gen);
 	if (ret < 0)
 		goto err_link_up;
 
@@ -627,6 +628,7 @@ err_exit_phy:
 static int rockchip_pcie_parse_dt(struct udevice *dev)
 {
 	struct rk_pcie *priv = dev_get_priv(dev);
+	u32 max_link_speed;
 	int ret;
 
 	priv->dbi_base = (void *)dev_read_addr_index(dev, 0);
@@ -675,6 +677,12 @@ static int rockchip_pcie_parse_dt(struct udevice *dev)
 
 	if (dev_read_bool(dev, "rockchip,bifurcation"))
 		priv->is_bifurcation = true;
+
+	ret = ofnode_read_u32(dev->node, "max-link-speed", &max_link_speed);
+	if (ret < 0 || max_link_speed > 4)
+		priv->gen = 0;
+	else
+		priv->gen = max_link_speed;
 
 	return 0;
 }
@@ -753,6 +761,7 @@ static const struct dm_pci_ops rockchip_pcie_ops = {
 
 static const struct udevice_id rockchip_pcie_ids[] = {
 	{ .compatible = "rockchip,rk3568-pcie" },
+	{ .compatible = "rockchip,rk3588-pcie" },
 	{ }
 };
 

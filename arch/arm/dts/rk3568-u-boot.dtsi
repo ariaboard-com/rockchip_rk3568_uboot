@@ -17,6 +17,57 @@
 		stdout-path = &uart2;
 		u-boot,spl-boot-order = &sdmmc0, &sdhci, &nandc0, &spi_nand, &spi_nor;
 	};
+
+	dc_12v: dc-12v {
+		compatible = "regulator-fixed";
+		regulator-name = "dc_12v";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <12000000>;
+		regulator-max-microvolt = <12000000>;
+	};
+
+	vcc3v3_sys: vcc3v3-sys {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3_sys";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&dc_12v>;
+	};
+
+	pcie30_avdd0v9: pcie30-avdd0v9 {
+		compatible = "regulator-fixed";
+		regulator-name = "pcie30_avdd0v9";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <900000>;
+		regulator-max-microvolt = <900000>;
+		vin-supply = <&vcc3v3_sys>;
+	};
+
+	pcie30_avdd1v8: pcie30-avdd1v8 {
+		compatible = "regulator-fixed";
+		regulator-name = "pcie30_avdd1v8";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		vin-supply = <&vcc3v3_sys>;
+	};
+
+	vcc3v3_pcie: gpio-regulator {
+		u-boot,dm-pre-reloc;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3_pcie";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		gpio = <&gpio0 RK_PD4 GPIO_ACTIVE_HIGH>;
+		startup-delay-us = <5000>;
+		vin-supply = <&dc_12v>;
+	};
 };
 
 &psci {
@@ -117,7 +168,7 @@
 		reg = <0>;
 		spi-tx-bus-width = <1>;
 		spi-rx-bus-width = <4>;
-		spi-max-frequency = <96000000>;
+		spi-max-frequency = <75000000>;
 	};
 
 	spi_nor: flash@1 {
@@ -188,7 +239,7 @@
 	nand@0 {
 		u-boot,dm-spl;
 		reg = <0>;
-		nand-ecc-mode = "hw_syndrome";
+		nand-ecc-mode = "hw";
 		nand-ecc-strength = <16>;
 		nand-ecc-step-size = <1024>;
 	};
@@ -367,12 +418,23 @@
 	u-boot,dm-pre-reloc;
 };
 
+&pcie30_phy_grf {
+	u-boot,dm-pre-reloc;
+};
+
 &pcie30phy {
 	u-boot,dm-pre-reloc;
 	status = "okay";
 };
 
 &pcie3x2 {
+	u-boot,dm-pre-reloc;
+	vpcie3v3-supply = <&vcc3v3_pcie>;
+	reset-gpios = <&gpio2 RK_PD6 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+};
+
+&pcie30phy {
 	u-boot,dm-pre-reloc;
 	status = "okay";
 };
@@ -427,3 +489,49 @@
 	u-boot,dm-pre-reloc;
 	status = "okay";
 };
+
+&sata1 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&combphy1_usq {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&pipegrf {
+	u-boot,dm-pre-reloc;
+};
+
+&pipe_phy_grf1{
+	u-boot,dm-pre-reloc;
+};
+
+#if 0
+&i2c0 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&i2c0_xfer {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&i2c1 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&i2c1_xfer {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&pcfg_pull_none_smt {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+#endif
+

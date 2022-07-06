@@ -17,7 +17,7 @@
 #include "rkcommon.h"
 
 enum {
-	RK_SIGNATURE		= 0x0ff0aa55,
+	RK_MAGIC		= 0x0ff0aa55,
 	RK_MAGIC_V2		= 0x534E4B52,
 };
 
@@ -49,6 +49,32 @@ struct image_entry {
 	uint32_t counter;
 	uint8_t reserved[8];
 	uint8_t hash[64];
+<<<<<<< HEAD
+=======
+};
+
+/**
+ * struct header0_info_v2 - from rk35 on boot rom using the new header block
+ *
+ * This is stored at SD card block 64 (where each block is 512 bytes)
+ *
+ * @magic:	Magic (must be RK_MAGIC_V2)
+ * @size_and_nimage:	[31:16]number of images;[15:0]
+ *			offset to hash field of header(unit as 4Byte)
+ * @boot_flag:	[3:0]hash type(0:none,1:sha256,2:sha512)
+ * @signature:	hash or signature for header info
+ *
+ */
+struct header0_info_v2 {
+	uint32_t magic;
+	uint8_t reserved[4];
+	uint32_t size_and_nimage;
+	uint32_t boot_flag;
+	uint8_t reserved1[104];
+	struct image_entry images[4];
+	uint8_t reserved2[1064];
+	uint8_t hash[512];
+>>>>>>> fc354ea827411c1cc35ddf76162aed02f7a9c7d5
 };
 
 /**
@@ -57,14 +83,14 @@ struct image_entry {
  * This is stored at SD card block 64 (where each block is 512 bytes, or at
  * the start of SPI flash. It is encoded with RC4.
  *
- * @signature:		Signature (must be RKSD_SIGNATURE)
+ * @magic:		Magic (must be RK_MAGIC)
  * @disable_rc4:	0 to use rc4 for boot image,  1 to use plain binary
  * @init_offset:	Offset in blocks of the SPL code from this header
  *			block. E.g. 4 means 2KB after the start of this header.
  * Other fields are not used by U-Boot
  */
 struct header0_info {
-	uint32_t signature;
+	uint32_t magic;
 	uint8_t reserved[4];
 	uint32_t disable_rc4;
 	uint16_t init_offset;
@@ -111,8 +137,8 @@ struct header1_info {
  * @spl_hdr:		Boot ROM requires a 4-bytes spl header
  * @spl_size:		Spl size(include extra 4-bytes spl header)
  * @spl_rc4:		RC4 encode the SPL binary (same key as header)
+ * @header_ver:		header block version
  */
-
 struct spl_info {
 	const char *imagename;
 	const char *spl_hdr;
@@ -124,7 +150,12 @@ struct spl_info {
 static struct spl_info spl_infos[] = {
 	{ "rk3036", "RK30", 0x1000, false, RK_HEADER_V1 },
 	{ "rk3066", "RK30", 0x8000, true, RK_HEADER_V1 },
+<<<<<<< HEAD
 	{ "rk3128", "RK31", 0x1800, false, RK_HEADER_V1 },
+=======
+	{ "rk3128", "RK31", 0x2000 - 0x800, false, RK_HEADER_V1 },
+	{ "px3se", "RK31", 0x2000 - 0x800, false, RK_HEADER_V1 },
+>>>>>>> fc354ea827411c1cc35ddf76162aed02f7a9c7d5
 	{ "rk3188", "RK31", 0x8000 - 0x800, true, RK_HEADER_V1 },
 	{ "rk322x", "RK32", 0x8000 - 0x1000, false, RK_HEADER_V1 },
 	{ "rk3288", "RK32", 0x8000, false, RK_HEADER_V1 },
@@ -132,11 +163,21 @@ static struct spl_info spl_infos[] = {
 	{ "rk3328", "RK32", 0x8000 - 0x800, false, RK_HEADER_V1 },
 	{ "rk3368", "RK33", 0x8000 - 0x1000, false, RK_HEADER_V1 },
 	{ "rk3399", "RK33", 0x30000 - 0x2000, false, RK_HEADER_V1 },
+<<<<<<< HEAD
 	{ "px30", "RK33", 0x2800, false, RK_HEADER_V1 },
 	{ "rv1108", "RK11", 0x1800, false, RK_HEADER_V1 },
 	{ "rv1126", "110B", 0x10000 - 0x1000, false, RK_HEADER_V1 },
 	{ "rk1808", "RK18", 0x200000 - 0x2000, false, RK_HEADER_V1 },
 	{ "rk356x", "RK35", 0x10000 - 0x1000, false, RK_HEADER_V2 },
+=======
+	{ "rk3326", "RK33", 0x4000 - 0x1000, false, RK_HEADER_V1 },
+	{ "px30", "RK33", 0x4000 - 0x1000, false, RK_HEADER_V1 },
+	{ "rv1108", "RK11", 0x1800, false, RK_HEADER_V1 },
+	{ "rv1126", "110B", 0x10000 - 0x1000, false, RK_HEADER_V1 },
+	{ "rk1808", "RK18", 0x200000 - 0x2000, false, RK_HEADER_V1 },
+	{ "rk3568", "RK35", 0x10000 - 0x1000, false, RK_HEADER_V2 },
+	{ "rk3588", "RK35", 0x100000 - 0x1000, false, RK_HEADER_V2 },
+>>>>>>> fc354ea827411c1cc35ddf76162aed02f7a9c7d5
 };
 
 /**
@@ -258,7 +299,6 @@ const char *rkcommon_get_spl_hdr(struct image_tool_params *params)
 	return info->spl_hdr;
 }
 
-
 int rkcommon_get_spl_size(struct image_tool_params *params)
 {
 	struct spl_info *info = rkcommon_get_spl_info(params->imagename);
@@ -303,7 +343,7 @@ static void rkcommon_set_header0(void *buf, struct image_tool_params *params)
 	struct header0_info *hdr = buf;
 
 	memset(buf, '\0', RK_INIT_OFFSET * RK_BLK_SIZE);
-	hdr->signature = RK_SIGNATURE;
+	hdr->magic = RK_MAGIC;
 	hdr->disable_rc4 = !rkcommon_need_rc4_spl(params);
 	hdr->init_offset = RK_INIT_OFFSET;
 	hdr->init_size = spl_params.init_size / RK_BLK_SIZE;
@@ -334,6 +374,10 @@ static void rkcommon_set_header0_v2(void *buf, struct image_tool_params *params)
 	uint8_t *image_ptr = NULL;
 	int i;
 
+<<<<<<< HEAD
+=======
+	printf("Image Type:   Rockchip %s boot image\n", rkcommon_get_spl_hdr(params));
+>>>>>>> fc354ea827411c1cc35ddf76162aed02f7a9c7d5
 	memset(buf, '\0', RK_INIT_OFFSET * RK_BLK_SIZE);
 	hdr->magic   = cpu_to_le32(RK_MAGIC_V2);
 	hdr->size_and_nimage = cpu_to_le32((2 << 16) + 384);
@@ -361,6 +405,7 @@ void rkcommon_set_header(void *buf,  struct stat *sbuf,  int ifd,
 	struct header1_info *hdr = buf + RK_SPL_HDR_START;
 
 	if (rkcommon_is_header_v2(params)) {
+<<<<<<< HEAD
 		/* Set up the SPL name (i.e. copy spl_hdr over) */
 		memcpy(&hdr->magic, rkcommon_get_spl_hdr(params), RK_SPL_HDR_SIZE);
 		/* because of doing hash in the set_header0_v2
@@ -375,6 +420,16 @@ void rkcommon_set_header(void *buf,  struct stat *sbuf,  int ifd,
 		if (memcmp(&hdr->magic, "RSAK", 4))
 			memcpy(&hdr->magic, rkcommon_get_spl_hdr(params), RK_SPL_HDR_SIZE);
 
+=======
+		rkcommon_set_header0_v2(buf, params);
+	} else {
+		rkcommon_set_header0(buf, params);
+
+		/* Set up the SPL name (i.e. copy spl_hdr over) */
+		if (memcmp(&hdr->magic, "RSAK", 4))
+			memcpy(&hdr->magic, rkcommon_get_spl_hdr(params), RK_SPL_HDR_SIZE);
+
+>>>>>>> fc354ea827411c1cc35ddf76162aed02f7a9c7d5
 		if (rkcommon_need_rc4_spl(params))
 			rkcommon_rc4_encode_spl(buf, RK_SPL_HDR_START,
 						spl_params.init_size);
@@ -388,7 +443,7 @@ void rkcommon_set_header(void *buf,  struct stat *sbuf,  int ifd,
 	}
 }
 
-static inline unsigned rkcommon_offset_to_spi(unsigned offset)
+static inline unsigned int rkcommon_offset_to_spi(unsigned int offset)
 {
 	/*
 	 * While SD/MMC images use a flat addressing, SPI images are padded
@@ -400,7 +455,7 @@ static inline unsigned rkcommon_offset_to_spi(unsigned offset)
 static int rkcommon_parse_header(const void *buf, struct header0_info *header0,
 				 struct spl_info **spl_info)
 {
-	unsigned hdr1_offset;
+	unsigned int hdr1_offset;
 	struct header1_info *hdr1_sdmmc, *hdr1_spi;
 	int i;
 
@@ -414,7 +469,7 @@ static int rkcommon_parse_header(const void *buf, struct header0_info *header0,
 	memcpy((void *)header0, buf, sizeof(struct header0_info));
 	rc4_encode((void *)header0, sizeof(struct header0_info), rc4_key);
 
-	if (header0->signature != RK_SIGNATURE)
+	if (header0->magic != RK_MAGIC)
 		return -EPROTO;
 
 	/* We don't support RC4 encoded image payloads here, yet... */
@@ -441,6 +496,7 @@ static int rkcommon_parse_header(const void *buf, struct header0_info *header0,
 	return -1;
 }
 
+<<<<<<< HEAD
 
 static int rkcommon_parse_header_v2(const void *buf,
 				 struct header0_info_v2 *header, struct spl_info **spl_info)
@@ -452,11 +508,16 @@ static int rkcommon_parse_header_v2(const void *buf,
 	if (spl_info)
 		*spl_info = NULL;
 
+=======
+static int rkcommon_parse_header_v2(const void *buf, struct header0_info_v2 *header)
+{
+>>>>>>> fc354ea827411c1cc35ddf76162aed02f7a9c7d5
 	memcpy((void *)header, buf, sizeof(struct header0_info_v2));
 
 	if (le32_to_cpu(header->magic) != RK_MAGIC_V2)
 		return -EPROTO;
 
+<<<<<<< HEAD
 	hdr1_offset = ((le32_to_cpu(header->images[0].size_and_off)) & 0xFFFF) * RK_BLK_SIZE;
 	hdr1_sdmmc = (struct header1_info *)(buf + hdr1_offset);
 	hdr1_spi = (struct header1_info *)(buf +
@@ -477,6 +538,9 @@ static int rkcommon_parse_header_v2(const void *buf,
 	}
 
 	return -1;
+=======
+	return 0;
+>>>>>>> fc354ea827411c1cc35ddf76162aed02f7a9c7d5
 }
 
 int rkcommon_verify_header(unsigned char *buf, int size,
@@ -485,6 +549,10 @@ int rkcommon_verify_header(unsigned char *buf, int size,
 	struct header0_info header0;
 	struct spl_info *img_spl_info, *spl_info;
 	int ret;
+
+	/* spl_hdr is abandon on header_v2 */
+	if ((*(uint32_t *)buf) == RK_MAGIC_V2)
+		return 0;
 
 	ret = rkcommon_parse_header(buf, &header0, &img_spl_info);
 
@@ -518,6 +586,7 @@ void rkcommon_print_header(const void *buf)
 	uint8_t image_type;
 	int ret, boot_size, init_size;
 
+<<<<<<< HEAD
 
 	if ((*(uint32_t *)buf) == RK_MAGIC_V2) {
 		ret = rkcommon_parse_header_v2(buf, &header0_v2, &spl_info);
@@ -528,6 +597,16 @@ void rkcommon_print_header(const void *buf)
 		}
 
 		image_type = ret;
+=======
+	if ((*(uint32_t *)buf) == RK_MAGIC_V2) {
+		ret = rkcommon_parse_header_v2(buf, &header0_v2);
+
+		if (ret < 0) {
+			fprintf(stderr, "Error: image verification failed\n");
+			return;
+		}
+
+>>>>>>> fc354ea827411c1cc35ddf76162aed02f7a9c7d5
 		init_size = header0_v2.images[0].size_and_off >> 16;
 		init_size = init_size * RK_BLK_SIZE;
 		boot_size = header0_v2.images[1].size_and_off >> 16;
@@ -538,6 +617,7 @@ void rkcommon_print_header(const void *buf)
 		/* If this is the (unimplemented) RC4 case, then fail silently */
 		if (ret == -ENOSYS)
 			return;
+<<<<<<< HEAD
 
 		if (ret < 0) {
 			fprintf(stderr, "Error: image verification failed\n");
@@ -547,12 +627,23 @@ void rkcommon_print_header(const void *buf)
 		image_type = ret;
 		init_size = header0.init_size * RK_BLK_SIZE;
 		boot_size = header0.init_boot_size * RK_BLK_SIZE - init_size;
+=======
+
+		if (ret < 0) {
+			fprintf(stderr, "Error: image verification failed\n");
+			return;
+		}
+
+		image_type = ret;
+		init_size = header0.init_size * RK_BLK_SIZE;
+		boot_size = header0.init_boot_size * RK_BLK_SIZE - init_size;
+		printf("Image Type:   Rockchip %s (%s) boot image\n",
+		       spl_info->spl_hdr,
+		       (image_type == IH_TYPE_RKSD) ? "SD/MMC" : "SPI");
+>>>>>>> fc354ea827411c1cc35ddf76162aed02f7a9c7d5
 	}
 
-	printf("Image Type:   Rockchip %s (%s) boot image\n",
-	       spl_info->spl_hdr,
-	       (image_type == IH_TYPE_RKSD) ? "SD/MMC" : "SPI");
-	printf("Init Data Size: %d bytes\n", header0.init_size * RK_BLK_SIZE);
+	printf("Init Data Size: %d bytes\n", init_size);
 
 	if (boot_size != RK_MAX_BOOT_SIZE)
 		printf("Boot Data Size: %d bytes\n", boot_size);

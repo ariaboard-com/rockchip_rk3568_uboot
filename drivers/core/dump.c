@@ -14,10 +14,10 @@ static void show_devices(struct udevice *dev, int depth, int last_flag)
 {
 	int i, is_last;
 	struct udevice *child;
-	int pre_reloc, remained;
 
 	/* print the first 11 characters to not break the tree-format. */
-	printf(" %-10.10s [ %c ]   %-25.25s  ", dev->uclass->uc_drv->name,
+	printf(" %08lx    %-10.10s [ %c ]   %-25.25s  ",
+	       (ulong)dev, dev->uclass->uc_drv->name,
 	       dev->flags & DM_FLAG_ACTIVATED ? '+' : ' ', dev->driver->name);
 
 	for (i = depth; i >= 0; i--) {
@@ -35,15 +35,15 @@ static void show_devices(struct udevice *dev, int depth, int last_flag)
 		}
 	}
 
-	pre_reloc = dev_read_bool(dev, "u-boot,dm-pre-reloc") ||
-		    dev_read_bool(dev, "u-boot,dm-spl");
-	if (pre_reloc)
-		remained = !list_empty(&dev->uclass_node);
-	else
-		remained = 0;
+#ifdef CONFIG_USING_KERNEL_DTB_V2
+	printf("%s %s\n", dev->name, dev->flags & DM_FLAG_KNRL_DTB ? "" : "*");
+#else
+	int pre_reloc, remained;
 
+	pre_reloc = dev->flags & DM_FLAG_KNRL_DTB ? 0 : 1;
+	remained = pre_reloc ? !list_empty(&dev->uclass_node) : 0;
 	printf("%s %s%s\n", dev->name, pre_reloc ? "*" : "", remained ? "*" : "");
-
+#endif
 	list_for_each_entry(child, &dev->child_head, sibling_node) {
 		is_last = list_is_last(&child->sibling_node, &dev->child_head);
 		show_devices(child, depth + 1, (last_flag << 1) | is_last);
@@ -56,8 +56,8 @@ void dm_dump_all(void)
 
 	root = dm_root();
 	if (root) {
-		printf(" Class      Probed        Driver               Name\n");
-		printf("----------------------------------------------------------\n");
+		printf(" Addr        Class      Probed    Driver                   Name\n");
+		printf("-------------------------------------------------------------------------\n");
 		show_devices(root, -1, 0);
 	}
 }
@@ -71,13 +71,16 @@ void dm_dump_all(void)
  */
 static void dm_display_line(struct udevice *dev)
 {
-	printf("  %c [ %c ] %s @ %08lx",
-	       dev_read_bool(dev, "u-boot,dm-pre-pre_reloc") ||
-	       dev_read_bool(dev, "u-boot,dm-spl") ? '*' : ' ',
+	printf("  [ %c ] %s @ %08lx",
 	       dev->flags & DM_FLAG_ACTIVATED ? '+' : ' ',
 	       dev->name, (ulong)map_to_sysmem(dev));
 	if (dev->seq != -1 || dev->req_seq != -1)
 		printf(", seq %d, (req %d)", dev->seq, dev->req_seq);
+	if (dev->driver->id == UCLASS_BLK) {
+		struct blk_desc *desc = dev_get_uclass_platdata(dev);
+		printf(" | %s%d", blk_get_if_type_name(desc->if_type), desc->devnum);
+	}
+	printf(" %c", dev->flags & DM_FLAG_KNRL_DTB ? ' ' : '*');
 	puts("\n");
 }
 

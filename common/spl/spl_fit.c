@@ -8,6 +8,7 @@
 #include <common.h>
 #include <boot_rkimg.h>
 #include <errno.h>
+#include <fdt_support.h>
 #include <image.h>
 #include <malloc.h>
 #include <mtd_blk.h>
@@ -266,7 +267,7 @@ static int spl_load_fit_image(struct spl_load_info *info, ulong sector,
 
 #ifdef CONFIG_SPL_FIT_IMAGE_POST_PROCESS
 	board_fit_image_post_process(fit, node, (ulong *)&load_addr,
-				     (ulong **)&src, &length);
+				     (ulong **)&src, &length, info);
 #endif
 	puts("OK\n");
 
@@ -378,7 +379,7 @@ static int spl_fit_image_get_os(const void *fit, int noffset, uint8_t *os)
 #endif
 }
 
-__weak int spl_fit_standalone_release(uintptr_t entry_point)
+__weak int spl_fit_standalone_release(char *id, uintptr_t entry_point)
 {
 	return 0;
 }
@@ -534,15 +535,29 @@ static int spl_load_kernel_fit(struct spl_image_info *spl_image,
 			return ret;
 
 		/* initial addr or entry point */
-		if (!strcmp(images[i], FIT_FDT_PROP))
+		if (!strcmp(images[i], FIT_FDT_PROP)) {
 			spl_image->fdt_addr = (void *)image_info.load_addr;
-		else if (!strcmp(images[i], FIT_KERNEL_PROP))
+#ifdef CONFIG_SPL_AB
+			char slot_suffix[3] = {0};
+
+			if (!spl_get_current_slot(info->dev, "misc", slot_suffix))
+				fdt_bootargs_append_ab((void *)image_info.load_addr, slot_suffix);
+#endif
+
+#ifdef CONFIG_SPL_MTD_SUPPORT
+			struct blk_desc *desc = info->dev;
+
+			if (desc->devnum == BLK_MTD_SPI_NAND)
+				fdt_bootargs_append((void *)image_info.load_addr, mtd_part_parse(desc));
+#endif
+		} else if (!strcmp(images[i], FIT_KERNEL_PROP)) {
 #if CONFIG_IS_ENABLED(OPTEE)
 			spl_image->entry_point_os = image_info.load_addr;
 #endif
 #if CONFIG_IS_ENABLED(ATF)
 			spl_image->entry_point_bl33 = image_info.load_addr;
 #endif
+		}
 	}
 
 	debug("fdt_addr=0x%08lx, entry_point=0x%08lx, entry_point_os=0x%08lx\n",
@@ -564,6 +579,7 @@ static int spl_internal_load_simple_fit(struct spl_image_info *spl_image,
 					ulong sector, void *fit_header)
 {
 	struct spl_image_info image_info;
+	char *desc;
 	int base_offset;
 	int images, ret;
 	int index = 0;
@@ -632,26 +648,32 @@ static int spl_internal_load_simple_fit(struct spl_image_info *spl_image,
 	 * Normally, different cores' firmware is attach to the config
 	 * "loadables" and load them together.
 	 */
-	if (node < 0)
-		node = spl_fit_get_image_node(fit, images, FIT_STANDALONE_PROP,
-					      0);
-	if (node > 0) {
-		/* Load the image and set up the spl_image structure */
-		ret = spl_load_fit_image(info, sector, fit, base_offset, node,
-					 &image_info);
+	for (; ; index++) {
+		node = spl_fit_get_image_node(fit, images,
+					      FIT_STANDALONE_PROP, index);
+		if (node < 0)
+			break;
+
+		ret = spl_load_fit_image(info, sector, fit, base_offset,
+					 node, &image_info);
+		if (ret)
+			return ret;
+
+		ret = fit_get_desc(fit, node, &desc);
 		if (ret)
 			return ret;
 
 		if (image_info.entry_point == FDT_ERROR)
 			image_info.entry_point = image_info.load_addr;
 
-		ret = spl_fit_standalone_release(image_info.entry_point);
+		ret = spl_fit_standalone_release(desc, image_info.entry_point);
 		if (ret)
-			printf("Start standalone fail, ret = %d\n", ret);
-
-		/* standalone is special one, continue to find others */
-		node = -1;
+			printf("%s: start standalone fail, ret=%d\n", desc, ret);
 	}
+
+	/* standalone is special one, continue to find others */
+	node = -1;
+	index = 0;
 
 	/*
 	 * Find the U-Boot image using the following search order:
@@ -771,6 +793,7 @@ int spl_load_simple_fit(struct spl_image_info *spl_image,
 	int ret = -EINVAL;
 	int i;
 
+	printf("Trying fit image at 0x%lx sector\n", sector_offs);
 	for (i = 0; i < CONFIG_SPL_FIT_IMAGE_MULTIPLE; i++) {
 		if (i > 0) {
 			sector_offs +=

@@ -72,7 +72,7 @@ static uint rockchip_dwmmc_get_mmc_clk(struct dwmci_host *host, uint freq)
 	ret = clk_set_rate(&priv->clk, freq);
 	if (ret < 0) {
 		debug("%s: err=%d\n", __func__, ret);
-		return ret;
+		return 0;
 	}
 
 	return freq;
@@ -122,6 +122,7 @@ static int rockchip_dwmmc_ofdata_to_platdata(struct udevice *dev)
 	return 0;
 }
 
+#ifndef CONFIG_MMC_SIMPLE
 static int rockchip_dwmmc_execute_tuning(struct dwmci_host *host, u32 opcode)
 {
 	int i = 0;
@@ -167,6 +168,9 @@ static int rockchip_dwmmc_execute_tuning(struct dwmci_host *host, u32 opcode)
 
 	return ret;
 }
+#else
+static int rockchip_dwmmc_execute_tuning(struct dwmci_host *host, u32 opcode) { return 0; }
+#endif
 
 static int rockchip_dwmmc_probe(struct udevice *dev)
 {

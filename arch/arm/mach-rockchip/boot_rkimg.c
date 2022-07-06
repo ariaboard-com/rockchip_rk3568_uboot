@@ -19,6 +19,7 @@
 #include <key.h>
 #include <mmc.h>
 #include <malloc.h>
+#include <nvme.h>
 #include <stdlib.h>
 #include <sysmem.h>
 #include <asm/io.h>
@@ -36,9 +37,20 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-static void boot_devtype_init(void)
+__weak int rk_board_early_fdt_fixup(void *blob)
+{
+	return 0;
+}
+
+__weak int rk_board_scan_bootdev(void)
 {
 	const char *devtype_num_set = "run rkimg_bootdev";
+
+	return run_command_list(devtype_num_set, -1, 0);
+}
+
+static void boot_devtype_init(void)
+{
 	char *devtype = NULL, *devnum = NULL;
 	static int done;	/* static */
 	int atags_en = 0;
@@ -47,6 +59,12 @@ static void boot_devtype_init(void)
 	if (done)
 		return;
 
+	/*
+	 * The loader stage does not support SATA, and the boot device
+	 * can only be other storage. Therefore, it is necessary to
+	 * initialize the SATA device before judging the initialization
+	 * of atag boot device
+	 */
 #if defined(CONFIG_SCSI) && defined(CONFIG_CMD_SCSI) && defined(CONFIG_AHCI)
 	ret = run_command("scsi scan", 0);
 	if (!ret) {
@@ -58,6 +76,25 @@ static void boot_devtype_init(void)
 			env_set("devnum", devnum);
 			goto finish;
 		}
+	}
+#endif
+
+#ifdef CONFIG_NVME
+	struct udevice *udev;
+
+	pci_init();
+	ret = nvme_scan_namespace();
+	if (!ret) {
+		ret = blk_get_device(IF_TYPE_NVME, 0, &udev);
+		if (!ret) {
+			devtype = "nvme";
+			devnum = "0";
+			env_set("devtype", devtype);
+			env_set("devnum", devnum);
+			goto finish;
+		}
+	} else {
+		printf("Set nvme as boot storage fail ret=%d\n", ret);
 	}
 #endif
 
@@ -91,7 +128,7 @@ static void boot_devtype_init(void)
 #ifdef CONFIG_MMC
 	mmc_initialize(gd->bd);
 #endif
-	ret = run_command_list(devtype_num_set, -1, 0);
+	ret = rk_board_scan_bootdev();
 	if (ret) {
 		/* Set default dev type/num if command not valid */
 		devtype = "mmc";
@@ -106,11 +143,10 @@ finish:
 	       env_get("devtype"), env_get("devnum"));
 }
 
-static int get_bootdev_type(void)
+int get_bootdev_type(void)
 {
 	char *boot_media = NULL, *devtype = NULL;
 	char boot_options[128] = {0};
-	static int appended;
 	ulong devnum = 0;
 	int type = 0;
 
@@ -147,12 +183,17 @@ static int get_bootdev_type(void)
 	} else if (!strcmp(devtype, "scsi")) {
 		type = IF_TYPE_SCSI;
 		boot_media = "scsi";
+	} else if (!strcmp(devtype, "usb")) {
+		type = IF_TYPE_USB;
+		boot_media = "usb";
+	} else if (!strcmp(devtype, "nvme")) {
+		type = IF_TYPE_NVME;
+		boot_media = "nvme";
 	} else {
 		/* Add new to support */
 	}
 
-	if (!appended && boot_media) {
-		appended = 1;
+	if (boot_media) {
 
 	/*
 	 * The legacy rockchip Android (SDK < 8.1) requires "androidboot.mode="
@@ -265,11 +306,7 @@ void rockchip_set_bootdev(struct blk_desc *desc)
 __weak int rockchip_dnl_key_pressed(void)
 {
 #if defined(CONFIG_DM_KEY)
-#ifdef CONFIG_CMD_ROCKUSB
 	return key_is_pressed(key_read(KEY_VOLUMEUP));
-#else
-	return key_is_pressed(key_read(KEY_MENU));
-#endif
 
 #elif defined(CONFIG_ADC)
 	const void *blob = gd->fdt_blob;
@@ -300,25 +337,6 @@ void setup_download_mode(void)
 
 	boot_devtype_init();
 
-	/*
-	 * rockchip_dnl_key_pressed():
-	 *
-	 * (1) volume-up key (default)
-	 * (2) menu key (If no rockusb)
-	 *
-	 * It's possible that USB is disabled due to developer needs
-	 * a critial size of u-boot.bin.
-	 *
-	 * Disabling USB makes vbus can't be detected any more, so that
-	 * we add menu key. The events trigger are changed:
-	 *
-	 * - rockusb mode(actually fallback to bootrom mode):
-	 *	"volume-up pressed + vbus=1" replaced with "menu pressed"
-	 * - recovery mode:
-	 *	"volume-up pressed + vbus=0" replaced with "volume-up pressed"
-	 *
-	 * At the most time, USB is enabled and this feature is not applied.
-	 */
 	if (rockchip_dnl_key_pressed() || is_hotkey(HK_ROCKUSB_DNL)) {
 		printf("download %skey pressed... ",
 		       is_hotkey(HK_ROCKUSB_DNL) ? "hot" : "");
@@ -503,64 +521,178 @@ static int rockchip_read_distro_dtb(void *fdt_addr)
 }
 #endif
 
-int rockchip_read_dtb_file(void *fdt_addr)
-{
-	int hash_size;
-	char *hash;
-	u32 size;
-	int ret = -1;
+enum {
+	LOCATE_DISTRO,
+	LOCATE_RESOURCE,
+	LOCATE_FIT,
+	LOCATE_END,
+};
 
-#ifdef CONFIG_ROCKCHIP_FIT_IMAGE
-	if (ret) {
-		hash_size = 0;
-		ret = rockchip_read_fit_dtb(fdt_addr, &hash, &hash_size);
-	}
-#endif
-#ifdef CONFIG_ROCKCHIP_UIMAGE
-	if (ret) {
-		hash_size = 0;
-		ret = rockchip_read_uimage_dtb(fdt_addr, &hash, &hash_size);
-	}
-#endif
+static int rkimg_traverse_read_dtb(void *fdt, int where)
+{
+	if (where == LOCATE_DISTRO) {
 #ifdef CONFIG_ROCKCHIP_EARLY_DISTRO_DTB
-	if (ret) {
-		hash_size = 0;
-		ret = rockchip_read_distro_dtb(fdt_addr);
-	}
+		return rockchip_read_distro_dtb(fdt);
 #endif
+	} else if (where == LOCATE_RESOURCE) {
 #ifdef CONFIG_ROCKCHIP_RESOURCE_IMAGE
-	if (ret) {
-		hash_size = 0;
-		ret = rockchip_read_resource_dtb(fdt_addr, &hash, &hash_size);
-	}
+		int hash_size = 0;
+		char *hash;
+		u32 ret;
+
+		ret = rockchip_read_resource_dtb(fdt, &hash, &hash_size);
+		if (ret) {
+			printf("Failed to load DTB, ret=%d\n", ret);
+			return ret;
+		}
+
+		if (fdt_check_header(fdt)) {
+			printf("Invalid DTB magic !\n");
+			return -EBADF;
+		}
+#ifdef CONFIG_ROCKCHIP_DTB_VERIFY
+		if (hash_size && fdt_check_hash(fdt,
+			fdt_totalsize(fdt), hash, hash_size)) {
+			printf("Invalid DTB hash !\n");
+			return -EBADF;
+		}
 #endif
+		return 0;
+#endif
+	} else if (where == LOCATE_FIT) {
+#if defined(CONFIG_ROCKCHIP_FIT_IMAGE) && !defined(CONFIG_ROCKCHIP_RESOURCE_IMAGE)
+		return fit_image_read_dtb(fdt);
+#endif
+	}
+
+	return -EINVAL;
+}
+
+int rockchip_read_dtb_file(void *fdt)
+{
+	int locate, ret;
+	int size;
+
+	/* init resource list */
+#ifdef CONFIG_ROCKCHIP_RESOURCE_IMAGE
+	resource_traverse_init_list();
+#endif
+
+	/* traverse location */
+	for (locate = 0; locate < LOCATE_END; locate++) {
+		ret = rkimg_traverse_read_dtb(fdt, locate);
+		if (!ret)
+			break;
+	}
 	if (ret) {
-		printf("Failed to load DTB\n");
+		printf("No find valid DTB, ret=%d\n", ret);
 		return ret;
 	}
 
-	if (fdt_check_header(fdt_addr)) {
-		printf("Get a bad DTB file !\n");
-		return -EBADF;
-	}
-
-	size = fdt_totalsize(fdt_addr);
-
-#ifdef CONFIG_ROCKCHIP_DTB_VERIFY
-	if (hash_size && fdt_check_hash(fdt_addr, size, hash, hash_size)) {
-		printf("Get a bad hash of DTB !\n");
-		return -EBADF;
-	}
-#endif
-	if (!sysmem_alloc_base(MEM_FDT, (phys_addr_t)fdt_addr,
-			       ALIGN(size, RK_BLK_SIZE) +
-			       CONFIG_SYS_FDT_PAD))
+	/* reserved memory */
+	size = fdt_totalsize(fdt);
+	if (!sysmem_alloc_base(MEM_FDT, (phys_addr_t)fdt,
+		ALIGN(size, RK_BLK_SIZE) + CONFIG_SYS_FDT_PAD))
 		return -ENOMEM;
 
+	/* fixup/overlay */
+	rk_board_early_fdt_fixup(fdt);
 #if defined(CONFIG_ANDROID_BOOT_IMAGE) && defined(CONFIG_OF_LIBFDT_OVERLAY)
-	android_fdt_overlay_apply((void *)fdt_addr);
+	android_fdt_overlay_apply((void *)fdt);
 #endif
 
 	return 0;
 }
 #endif
+
+int rockchip_ram_read_dtb_file(void *img, void *fdt)
+{
+	int format;
+	int ret;
+
+	format = (genimg_get_format(img));
+#ifdef CONFIG_ANDROID_BOOT_IMAGE
+	if (format == IMAGE_FORMAT_ANDROID) {
+		struct andr_img_hdr *hdr = img;
+		struct blk_desc *dev_desc;
+		ulong offset;
+
+		dev_desc = rockchip_get_bootdev();
+		if (!dev_desc)
+			return -ENODEV;
+
+		offset = hdr->page_size + ALIGN(hdr->kernel_size, hdr->page_size) +
+			ALIGN(hdr->ramdisk_size, hdr->page_size);
+#ifdef CONFIG_ROCKCHIP_RESOURCE_IMAGE
+		ret = resource_create_ram_list(dev_desc, (void *)hdr + offset);
+		if (ret)
+			return ret;
+
+		return rockchip_read_dtb_file((void *)fdt);
+#else
+		if (fdt_check_header((void *)offset))
+			return -EINVAL;
+
+		memcpy(fdt, (char *)offset, fdt_totalsize(offset));
+		if (!sysmem_alloc_base(MEM_FDT, (phys_addr_t)fdt,
+			ALIGN(fdt_totalsize(fdt), RK_BLK_SIZE) + CONFIG_SYS_FDT_PAD))
+			return -ENOMEM;
+
+		return 0;
+#endif
+	}
+#endif
+#if IMAGE_ENABLE_FIT
+	if (format == IMAGE_FORMAT_FIT) {
+		const void *data;
+		size_t size;
+		int noffset;
+#ifdef CONFIG_ROCKCHIP_RESOURCE_IMAGE
+		const char *path = "/images/resource";
+#else
+		const char *path = "/images/fdt";
+#endif
+
+		noffset = fdt_path_offset(img, path);
+		if (noffset < 0)
+			return noffset;
+
+#ifdef CONFIG_ROCKCHIP_RESOURCE_IMAGE
+		ret = fit_image_get_data(img, noffset, &data, &size);
+		if (ret < 0)
+			return ret;
+
+		dev_desc = rockchip_get_bootdev();
+		if (!dev_desc)
+			return -ENODEV;
+
+		ret = resource_create_ram_list(dev_desc, (void *)data);
+		if (ret) {
+			printf("resource_create_ram_list fail, ret=%d\n", ret);
+			return ret;
+		}
+
+		return rockchip_read_dtb_file((void *)fdt);
+#else
+
+		ret = fit_image_get_data(img, noffset, &data, &size);
+		if (ret)
+			return ret;
+
+		if (fdt_check_header(data))
+			return -EINVAL;
+
+		memcpy(fdt, data, size);
+		if (!sysmem_alloc_base(MEM_FDT, (phys_addr_t)fdt,
+			ALIGN(fdt_totalsize(fdt), RK_BLK_SIZE) + CONFIG_SYS_FDT_PAD))
+			return -ENOMEM;
+
+		printf("Load DTB from 'images/fdt'\n");
+
+		return 0;
+#endif
+	}
+#endif
+
+	return -EINVAL;
+}
